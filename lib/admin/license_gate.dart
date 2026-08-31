@@ -43,7 +43,7 @@ class _ErrorRetry extends StatelessWidget {
     final service = context.watch<LicenseService>();
     return Scaffold(
       body: Center(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(32),
           child: Column(
             mainAxisSize: MainAxisSize.min,

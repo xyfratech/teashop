@@ -175,7 +175,7 @@ class LicenseService extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  void _fallBackToCache([Object? _]) {
+  void _fallBackToCache([Object? err]) {
     final cached = _store.cachedShop();
     if (cached != null) {
       _shop = Shop.fromJson(cached);
@@ -184,7 +184,8 @@ class LicenseService extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
     _offline = true;
-    _error = 'Could not reach the server. Check your connection and retry.';
+    _error = 'Could not reach the server. Check your connection and retry.'
+        '${err == null ? '' : '\n\n$err'}';
     _set(GateState.error);
   }
 
