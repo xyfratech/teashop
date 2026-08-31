@@ -95,6 +95,24 @@ class LicenseService extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
 
+    // Returning user: we already have a Firebase session and a cached answer
+    // from a previous login. Paint the app straight away and let the network
+    // check below run behind it, so the brewing splash is only ever seen on
+    // the very first login. If the background check disagrees (shop expired,
+    // deleted, …) it will move the gate itself.
+    if (_gate == GateState.loading) {
+      if (_store.cachedIsAdmin()) {
+        _isAdmin = true;
+        _set(GateState.admin);
+      } else {
+        final cached = _store.cachedShop();
+        if (cached != null) {
+          _shop = Shop.fromJson(cached);
+          _set(_shop!.active ? GateState.ready : GateState.locked);
+        }
+      }
+    }
+
     final loginId = _currentLoginId;
 
     // First call — this is our real "is the server reachable" probe.
@@ -117,10 +135,12 @@ class LicenseService extends ChangeNotifier with WidgetsBindingObserver {
 
       if (admin) {
         _isAdmin = true;
+        await _store.setCachedIsAdmin(true);
         _set(GateState.admin);
         return;
       }
       _isAdmin = false;
+      await _store.setCachedIsAdmin(false);
 
       Map? row;
       if (loginId != null) {
@@ -255,6 +275,7 @@ class LicenseService extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> signOut() => _run(() async {
         await _fb.signOut();
         await _store.clearCachedShop();
+        await _store.setCachedIsAdmin(false);
         _shop = null;
         _isAdmin = false;
         _set(GateState.shopAuth);

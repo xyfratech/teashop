@@ -127,6 +127,11 @@ class DataStore {
 
   Future<void> clearCachedShop() => _meta.delete('cachedShop');
 
+  /// Remembers that the last resolved session was an admin, so a returning
+  /// admin also skips the brewing splash on the next cold start.
+  bool cachedIsAdmin() => _meta.get('cachedIsAdmin') == true;
+  Future<void> setCachedIsAdmin(bool v) => _meta.put('cachedIsAdmin', v);
+
   // --- Ledger cloud-backup outbox --------------------------------------------
   // A stable per-install id, used to partition this shop's rows in the backup
   // project (there is no user auth on that project).
