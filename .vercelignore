@@ -1,12 +1,7 @@
-# Native platform folders are not needed for the web build.
 android/
 ios/
 windows/
-linux/
-macos/
-
-# Local build artifacts – Vercel builds fresh.
-build/
-.dart_tool/
-.idea/
 test/
+.dart_tool/
+build/
+.idea/

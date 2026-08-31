@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../widgets/brewing_splash.dart';
 import '../license_service.dart';
 
 /// The only sign-in screen: one login ID. The admin's id opens the admin
@@ -42,6 +43,10 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final s = context.watch<LicenseService>();
     final scheme = Theme.of(context).colorScheme;
+
+    // Signing in bridges straight into the app's own brewing splash so the
+    // wait looks identical to first load.
+    if (s.busy) return const BrewingSplash(message: 'signing you in…');
 
     return Scaffold(
       body: SafeArea(
