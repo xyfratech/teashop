@@ -13,6 +13,7 @@ class DataStore {
   static const _categoryBoxName = 'categories';
   static const _productBoxName = 'products';
   static const _txnBoxName = 'txns';
+  static const _ledgerOutboxBoxName = 'ledger_outbox';
 
   static const rupee = '₹';
 
@@ -20,6 +21,7 @@ class DataStore {
   late Box _categories;
   late Box _products;
   late Box _txns;
+  late Box _ledgerOutbox;
 
   final Uuid _uuid = const Uuid();
   String newId() => _uuid.v4();
@@ -29,6 +31,11 @@ class DataStore {
     _categories = await Hive.openBox(_categoryBoxName);
     _products = await Hive.openBox(_productBoxName);
     _txns = await Hive.openBox(_txnBoxName);
+    _ledgerOutbox = await Hive.openBox(_ledgerOutboxBoxName);
+
+    if (_meta.get('clientId') == null) {
+      await _meta.put('clientId', newId());
+    }
 
     if (_meta.get('seeded') != true) {
       await _seed();
@@ -80,8 +87,53 @@ class DataStore {
       (_meta.get('openingBalance', defaultValue: 0.0) as num).toDouble();
   Future<void> setOpeningBalance(double v) => _meta.put('openingBalance', v);
 
+  /// Preset unit prices for the Chai & snack quick-bill counter.
+  double get chaiRate =>
+      (_meta.get('chaiRate', defaultValue: 10.0) as num).toDouble();
+  Future<void> setChaiRate(double v) => _meta.put('chaiRate', v);
+
+  double get snackRate =>
+      (_meta.get('snackRate', defaultValue: 15.0) as num).toDouble();
+  Future<void> setSnackRate(double v) => _meta.put('snackRate', v);
+
   String get themeMode => _meta.get('themeMode', defaultValue: 'system') as String;
   Future<void> setThemeMode(String v) => _meta.put('themeMode', v);
+
+  // --- SaaS licence cache (so a paid shop is not locked out when offline) ---
+  Map<String, dynamic>? cachedShop() {
+    final v = _meta.get('cachedShop');
+    if (v is Map) return Map<String, dynamic>.from(v);
+    return null;
+  }
+
+  Future<void> setCachedShop(Map<String, dynamic> shop) =>
+      _meta.put('cachedShop', shop);
+
+  Future<void> clearCachedShop() => _meta.delete('cachedShop');
+
+  // --- Ledger cloud-backup outbox --------------------------------------------
+  // A stable per-install id, used to partition this shop's rows in the backup
+  // project (there is no user auth on that project).
+  String get clientId => _meta.get('clientId') as String;
+
+  bool get ledgerBackfillDone => _meta.get('ledgerBackfillDone') == true;
+  Future<void> markLedgerBackfillDone() => _meta.put('ledgerBackfillDone', true);
+
+  int get ledgerOutboxCount => _ledgerOutbox.length;
+
+  /// Pending backup operations as (key, row) pairs, oldest first. Each row
+  /// carries an `_op` of `upsert` or `delete`.
+  List<MapEntry<dynamic, Map<String, dynamic>>> ledgerOutbox() => _ledgerOutbox
+      .toMap()
+      .entries
+      .map((e) =>
+          MapEntry(e.key, Map<String, dynamic>.from(e.value as Map)))
+      .toList();
+
+  Future<void> ledgerOutboxPut(String id, Map<String, dynamic> row) =>
+      _ledgerOutbox.put(id, row);
+
+  Future<void> ledgerOutboxRemove(dynamic key) => _ledgerOutbox.delete(key);
 
   // --- Categories ---
   List<Category> categories() => _categories.values
@@ -104,12 +156,17 @@ class DataStore {
   Future<void> putTxn(Txn t) => _txns.put(t.id, t.toMap());
   Future<void> deleteTxn(String id) => _txns.delete(id);
 
-  /// Wipes every record and re-seeds the starter data.
+  /// Wipes every record and re-seeds the starter data. The install identity
+  /// ([clientId]) is preserved so cloud backup keeps pointing at the same
+  /// partition.
   Future<void> clearAll() async {
+    final keepClientId = _meta.get('clientId');
     await _txns.clear();
     await _products.clear();
     await _categories.clear();
+    await _ledgerOutbox.clear();
     await _meta.clear();
+    if (keepClientId != null) await _meta.put('clientId', keepClientId);
     await _seed();
     await _meta.put('seeded', true);
   }

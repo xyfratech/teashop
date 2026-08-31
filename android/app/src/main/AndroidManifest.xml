@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.RECEIVE_SMS"/>
     <application
-        android:label="Tea Shop Manager"
+        android:label="kutyo"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

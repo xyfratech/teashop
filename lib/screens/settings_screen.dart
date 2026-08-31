@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../admin/ledger_sync.dart';
+import '../admin/license_service.dart';
+import '../admin/screens/shop_status_chip.dart';
 import '../state/app_state.dart';
 import '../utils/context_ext.dart';
 import 'categories_screen.dart';
@@ -12,12 +15,19 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    final license = context.watch<LicenseService>();
     final money = context.money;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(
         children: [
+          const _Heading('Subscription'),
+          _SubscriptionTile(license: license),
+          const Divider(height: 24),
+          const _Heading('Cloud backup'),
+          _LedgerBackupTile(sync: context.watch<LedgerSync>()),
+          const Divider(height: 24),
           const _Heading('Shop'),
           ListTile(
             leading: const Icon(Icons.storefront_outlined),
@@ -27,7 +37,10 @@ class SettingsScreen extends StatelessWidget {
               context,
               title: 'Shop name',
               initial: state.shopName,
-              onSave: state.setShopName,
+              onSave: (v) async {
+                await state.setShopName(v);
+                await license.updateShopName(v);
+              },
             ),
           ),
           ListTile(
@@ -45,6 +58,30 @@ class SettingsScreen extends StatelessWidget {
               title: 'Opening balance',
               initial: state.openingBalance,
               onSave: state.setOpeningBalance,
+            ),
+          ),
+          const Divider(height: 24),
+          const _Heading('Quick bill rates'),
+          ListTile(
+            leading: const Icon(Icons.local_cafe_outlined),
+            title: const Text('Chai rate'),
+            subtitle: Text('${money.format(state.chaiRate)} per cup'),
+            onTap: () => _editNumber(
+              context,
+              title: 'Chai rate',
+              initial: state.chaiRate,
+              onSave: state.setChaiRate,
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.bakery_dining_outlined),
+            title: const Text('Snack rate'),
+            subtitle: Text('${money.format(state.snackRate)} per item'),
+            onTap: () => _editNumber(
+              context,
+              title: 'Snack rate',
+              initial: state.snackRate,
+              onSave: state.setSnackRate,
             ),
           ),
           const Divider(height: 24),
@@ -259,6 +296,164 @@ class SettingsScreen extends StatelessWidget {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('All data reset')),
+    );
+  }
+}
+
+class _SubscriptionTile extends StatelessWidget {
+  const _SubscriptionTile({required this.license});
+
+  final LicenseService license;
+
+  @override
+  Widget build(BuildContext context) {
+    final shop = license.shop;
+    final scheme = Theme.of(context).colorScheme;
+
+    if (shop == null) {
+      return const ListTile(
+        leading: Icon(Icons.workspace_premium_outlined),
+        title: Text('Not linked to a subscription'),
+      );
+    }
+
+    return Column(
+      children: [
+        ListTile(
+          leading: const Icon(Icons.workspace_premium_outlined),
+          title: Row(
+            children: [
+              Text('${license.currency}${license.pricePerMonth} / month'),
+              const SizedBox(width: 8),
+              ShopStatusChip(shop.status),
+            ],
+          ),
+          subtitle: Text(
+            shop.daysLeft < 0
+                ? 'Expired on ${prettyDate(shop.expiresAt)}'
+                : 'Renews / expires ${prettyDate(shop.expiresAt)}'
+                    '  ·  ${shop.daysLeft} days left',
+          ),
+        ),
+        if (license.offline)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Offline — last synced status',
+                style: TextStyle(color: scheme.outline, fontSize: 12),
+              ),
+            ),
+          ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              OutlinedButton.icon(
+                onPressed: license.busy ? null : license.refresh,
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('Refresh'),
+              ),
+              const Spacer(),
+              TextButton.icon(
+                onPressed: license.busy
+                    ? null
+                    : () async {
+                        final ok = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Sign out of this shop?'),
+                            content: const Text(
+                              'Your ledger stays on this device. You will '
+                              'need your login ID to sign back in.',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, false),
+                                child: const Text('Cancel'),
+                              ),
+                              FilledButton(
+                                onPressed: () => Navigator.pop(ctx, true),
+                                child: const Text('Sign out'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (ok == true) await license.signOut();
+                      },
+                icon: const Icon(Icons.logout, size: 18),
+                label: const Text('Sign out'),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _LedgerBackupTile extends StatelessWidget {
+  const _LedgerBackupTile({required this.sync});
+
+  final LedgerSync sync;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    if (!sync.enabled) {
+      return const ListTile(
+        leading: Icon(Icons.cloud_off_outlined),
+        title: Text('Cloud backup is off'),
+        subtitle: Text('Every entry is kept on this device only.'),
+      );
+    }
+
+    final pending = sync.pending;
+    final String status;
+    if (sync.syncing) {
+      status = 'Backing up…';
+    } else if (pending > 0) {
+      status = '$pending change${pending == 1 ? '' : 's'} waiting to upload';
+    } else if (sync.lastSyncAt != null) {
+      status = 'All entries backed up · ${prettyDate(sync.lastSyncAt!)}';
+    } else {
+      status = 'Every entry is copied to the cloud automatically.';
+    }
+
+    return Column(
+      children: [
+        ListTile(
+          leading: Icon(
+            pending > 0 ? Icons.cloud_sync_outlined : Icons.cloud_done_outlined,
+          ),
+          title: const Text('Automatic backup'),
+          subtitle: Text(status),
+        ),
+        if (sync.lastError != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Last attempt failed — will retry. ${sync.lastError}',
+                style: TextStyle(color: scheme.error, fontSize: 12),
+              ),
+            ),
+          ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: sync.syncing ? null : sync.syncNow,
+              icon: const Icon(Icons.sync, size: 18),
+              label: const Text('Back up now'),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

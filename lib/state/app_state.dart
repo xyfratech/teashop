@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../admin/ledger_sync.dart';
 import '../data/data_store.dart';
 import '../models/app_enums.dart';
 import '../models/category.dart';
@@ -23,6 +24,12 @@ class AppState extends ChangeNotifier {
 
   final DataStore _store;
 
+  LedgerSync? _ledger;
+
+  /// Wires the cloud-backup sink. Called once from `main` after both this
+  /// state and [LedgerSync] exist.
+  void attachLedgerSync(LedgerSync sync) => _ledger = sync;
+
   List<Category> _categories = [];
   List<Product> _products = [];
   List<Txn> _txns = [];
@@ -37,6 +44,9 @@ class AppState extends ChangeNotifier {
   String get shopName => _store.shopName;
   String get currency => _store.currency;
   double get openingBalance => _store.openingBalance;
+
+  double get chaiRate => _store.chaiRate;
+  double get snackRate => _store.snackRate;
 
   ThemeMode get themeMode {
     switch (_store.themeMode) {
@@ -146,19 +156,43 @@ class AppState extends ChangeNotifier {
   int categoryUsageCount(String id) =>
       _txns.where((t) => t.categoryId == id).length;
 
+  // --- cloud backup ---
+  /// The domain shape of a transaction as stored in the backup project's
+  /// `transactions` table. Identity / ownership columns are added by
+  /// [LedgerSync] when the row is sent.
+  Map<String, dynamic> ledgerRow(Txn t) => {
+        'id': t.id,
+        'type': t.type.name,
+        'amount': t.amount,
+        'category_id': t.categoryId,
+        'category_name': categoryName(t.categoryId),
+        'product_id': t.productId,
+        'product_name': productById(t.productId)?.name,
+        'note': t.note,
+        'qty': t.quantity,
+        'method': t.method.name,
+        'occurred_at': t.date.toUtc().toIso8601String(),
+        'deleted': false,
+      };
+
+  List<Map<String, dynamic>> ledgerRows() => _txns.map(ledgerRow).toList();
+
   // --- mutations ---
   Future<void> addTxn(Txn t) async {
     await _store.putTxn(t);
+    await _ledger?.enqueueUpsert(ledgerRow(t));
     await load();
   }
 
   Future<void> updateTxn(Txn t) async {
     await _store.putTxn(t);
+    await _ledger?.enqueueUpsert(ledgerRow(t));
     await load();
   }
 
   Future<void> deleteTxn(String id) async {
     await _store.deleteTxn(id);
+    await _ledger?.enqueueDelete(id);
     await load();
   }
 
@@ -174,22 +208,36 @@ class AppState extends ChangeNotifier {
     );
   }
 
+  /// The income category whose name contains [keyword] (case-insensitive),
+  /// falling back to the default income bucket. Used by the Chai & snack
+  /// counter to file a bill under "Tea Sales".
+  Category incomeCategoryFor(String keyword) {
+    final k = keyword.toLowerCase();
+    return categoriesOfType(TxnType.income).firstWhere(
+      (c) => c.name.toLowerCase().contains(k),
+      orElse: () => defaultCategoryFor(TxnType.income),
+    );
+  }
+
   /// One-tap add used by the calculator tick, the dashboard buttons and the
-  /// Entries screen. No category prompt — [defaultCategoryFor] is used.
+  /// Entries screen. No category prompt — [defaultCategoryFor] is used unless
+  /// an explicit [categoryId] is given.
   Future<void> addQuickEntry({
     required TxnType type,
     required double amount,
     String note = '',
+    String? categoryId,
   }) async {
     final t = Txn(
       id: newId(),
       type: type,
       amount: amount,
-      categoryId: defaultCategoryFor(type).id,
+      categoryId: categoryId ?? defaultCategoryFor(type).id,
       note: note,
       date: DateTime.now(),
     );
     await _store.putTxn(t);
+    await _ledger?.enqueueUpsert(ledgerRow(t));
     await load();
   }
 
@@ -216,6 +264,7 @@ class AppState extends ChangeNotifier {
       productId: p.id,
     );
     await _store.putTxn(t);
+    await _ledger?.enqueueUpsert(ledgerRow(t));
     await load();
     return t;
   }
@@ -265,13 +314,25 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setChaiRate(double v) async {
+    await _store.setChaiRate(v);
+    notifyListeners();
+  }
+
+  Future<void> setSnackRate(double v) async {
+    await _store.setSnackRate(v);
+    notifyListeners();
+  }
+
   Future<void> setThemeMode(ThemeMode m) async {
     await _store.setThemeMode(m.name);
     notifyListeners();
   }
 
   Future<void> clearAll() async {
+    final wipedIds = _txns.map((t) => t.id).toList();
     await _store.clearAll();
+    await _ledger?.enqueueDeleteMany(wipedIds);
     await load();
   }
 }

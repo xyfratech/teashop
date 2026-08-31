@@ -6,6 +6,7 @@ import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../utils/calc_engine.dart';
 import '../widgets/amount_text.dart';
+import '../widgets/chai_snack_counter.dart';
 import '../widgets/quick_entry_sheet.dart';
 
 /// A plain 4-function calculator. Press `=` to resolve, then the green tick
@@ -17,8 +18,11 @@ class CalculatorScreen extends StatefulWidget {
   State<CalculatorScreen> createState() => _CalculatorScreenState();
 }
 
+enum _CalcMode { keypad, chaiSnack }
+
 class _CalculatorScreenState extends State<CalculatorScreen> {
   final CalcEngine _calc = CalcEngine();
+  _CalcMode _mode = _CalcMode.keypad;
 
   double get _value => _calc.value;
   String get _display => _calc.display;
@@ -64,9 +68,35 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Calculator')),
+      appBar: AppBar(
+        title: const Text('Calculator'),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(56),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+            child: SegmentedButton<_CalcMode>(
+              segments: const [
+                ButtonSegment(
+                  value: _CalcMode.keypad,
+                  label: Text('Keypad'),
+                  icon: Icon(Icons.calculate_outlined),
+                ),
+                ButtonSegment(
+                  value: _CalcMode.chaiSnack,
+                  label: Text('Chai & snack'),
+                  icon: Icon(Icons.local_cafe_outlined),
+                ),
+              ],
+              selected: {_mode},
+              onSelectionChanged: (s) => setState(() => _mode = s.first),
+            ),
+          ),
+        ),
+      ),
       body: SafeArea(
-        child: Column(
+        child: _mode == _CalcMode.chaiSnack
+            ? const ChaiSnackCounter()
+            : Column(
           children: [
             // ---- display ----
             Expanded(

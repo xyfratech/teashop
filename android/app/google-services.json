@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "1049759207813",
+    "firebase_url": "https://tea-shop-798ea-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "tea-shop-798ea",
+    "storage_bucket": "tea-shop-798ea.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1049759207813:android:8d62471262c538a947b4ec",
+        "android_client_info": {
+          "package_name": "tea.shop"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1049759207813-bevodr4mi7e338g4gi4fipo0d45jrlp5.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA1bc2CyDsa6V9vNH8jkpAJoJk4mUj0qhM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1049759207813-bevodr4mi7e338g4gi4fipo0d45jrlp5.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

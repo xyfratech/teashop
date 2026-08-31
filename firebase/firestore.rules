@@ -1,0 +1,36 @@
+rules_version = '2';
+
+// Firestore holds only the credential *mirror* — a human-readable record of
+// the admin account and every shop login the admin creates. The real shop
+// data lives in Supabase; Firebase Auth holds the password hashes.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAdmin() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // admins/{firebaseUid} -> { username, updatedAt }
+    match /admins/{uid} {
+      allow read: if request.auth != null;
+      // Only the preset admin account can claim this — shop owners have
+      // @shops.teashop.local emails and are rejected here.
+      allow create, update: if request.auth != null
+        && request.auth.uid == uid
+        && request.auth.token.email == 'admin@admins.teashop.local';
+      allow delete: if false;
+    }
+
+    // shopLogins/{loginId} -> { loginId, email, shopName, ownerName,
+    //                           firebaseUid, createdBy, createdAt }
+    match /shopLogins/{loginId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'admin/license_gate.dart';
 import 'screens/home_shell.dart';
 import 'state/app_state.dart';
 import 'theme/app_theme.dart';
@@ -12,12 +13,12 @@ class TeaShopApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final themeMode = context.select<AppState, ThemeMode>((s) => s.themeMode);
     return MaterialApp(
-      title: 'Tea Shop Manager',
+      title: 'kutyo',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: themeMode,
-      home: const HomeShell(),
+      home: const LicenseGate(child: HomeShell()),
     );
   }
 }
