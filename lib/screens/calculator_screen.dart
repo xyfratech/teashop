@@ -9,8 +9,8 @@ import '../widgets/amount_text.dart';
 import '../widgets/chai_snack_counter.dart';
 import '../widgets/quick_entry_sheet.dart';
 
-/// A plain 4-function calculator. Press `=` to resolve, then the green tick
-/// drops the result straight into your account as an entry.
+/// A plain 4-function calculator. `=` resolves the expression; the separate
+/// green tick drops the current result straight into your account as an entry.
 class CalculatorScreen extends StatefulWidget {
   const CalculatorScreen({super.key});
 
@@ -28,6 +28,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
   String get _display => _calc.display;
   String get _history => _calc.history;
   bool get _showTick => _calc.showTick;
+  bool get _canAdd => _calc.canAdd;
 
   static String _fmt(double v) => CalcEngine.format(v);
 
@@ -222,16 +223,14 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                           onTap: () => _tapOperator('+')),
                     ]),
                     _row([
-                      _Key('0', flex: 2, onTap: () => _tapDigit('0')),
+                      _Key('0', onTap: () => _tapDigit('0')),
                       _Key('.', onTap: () => _tapDigit('.')),
-                      _showTick
-                          ? _Key.icon(
-                              Icons.check,
-                              kind: _KeyKind.tick,
-                              onTap: _addToAccount,
-                            )
-                          : _Key('=',
-                              kind: _KeyKind.equals, onTap: _equals),
+                      _Key('=', kind: _KeyKind.equals, onTap: _equals),
+                      _Key.icon(
+                        Icons.check,
+                        kind: _KeyKind.tick,
+                        onTap: _canAdd ? _addToAccount : null,
+                      ),
                     ]),
                   ],
                 ),
@@ -252,7 +251,6 @@ class _Key extends StatelessWidget {
   const _Key(
     this.label, {
     this.kind = _KeyKind.number,
-    this.flex = 1,
     required this.onTap,
   }) : icon = null;
 
@@ -260,14 +258,14 @@ class _Key extends StatelessWidget {
     this.icon, {
     this.kind = _KeyKind.number,
     required this.onTap,
-  })  : label = null,
-        flex = 1;
+  }) : label = null;
 
   final String? label;
   final IconData? icon;
   final _KeyKind kind;
-  final int flex;
-  final VoidCallback onTap;
+
+  /// A null callback renders the key disabled (dimmed, non-tappable).
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -292,27 +290,32 @@ class _Key extends StatelessWidget {
         fg = scheme.onSecondaryContainer;
     }
 
+    final enabled = onTap != null;
+
     return Expanded(
-      flex: flex,
       child: Padding(
         padding: const EdgeInsets.all(5),
-        child: Material(
-          color: bg,
-          borderRadius: BorderRadius.circular(18),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: onTap,
-            child: Center(
-              child: icon != null
-                  ? Icon(icon, color: fg, size: kind == _KeyKind.tick ? 30 : 24)
-                  : Text(
-                      label!,
-                      style: TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w700,
-                        color: fg,
+        child: Opacity(
+          opacity: enabled ? 1 : 0.38,
+          child: Material(
+            color: bg,
+            borderRadius: BorderRadius.circular(18),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: onTap,
+              child: Center(
+                child: icon != null
+                    ? Icon(icon,
+                        color: fg, size: kind == _KeyKind.tick ? 30 : 24)
+                    : Text(
+                        label!,
+                        style: TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w700,
+                          color: fg,
+                        ),
                       ),
-                    ),
+              ),
             ),
           ),
         ),
