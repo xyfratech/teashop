@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="kutyo">
+  <rect width="128" height="128" rx="30" fill="#2E6B4F"/>
+  <g fill="none" stroke="#EAF6EE" stroke-width="6" stroke-linecap="round" opacity="0.34">
+    <path d="M55 33 C47 26 61 20 53 13"/>
+    <path d="M73 33 C81 26 67 20 78 14 C82 11 81 8 85 7"/>
+  </g>
+  <path d="M35 44 L93 44 L86 90 Q64 102 42 90 Z" fill="#EAF6EE"/>
+  <ellipse cx="64" cy="44" rx="29" ry="7.5" fill="#EAF6EE"/>
+  <ellipse cx="64" cy="42.5" rx="22" ry="5.5" fill="#DFA24A"/>
+  <path d="M90 50 C110 50 112 79 87 81" stroke="#EAF6EE" stroke-width="8" stroke-linecap="round" fill="none"/>
+  <path d="M32 98 Q64 114 96 98" stroke="#EAF6EE" stroke-width="6.5" stroke-linecap="round" fill="none"/>
+</svg>

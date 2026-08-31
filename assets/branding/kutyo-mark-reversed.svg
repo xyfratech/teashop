@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="kutyo">
+  <!-- Mark for dark / forest surfaces. Cup: #F6F5F0  Chai: #DFA24A -->
+  <g fill="none" stroke="#F6F5F0" stroke-width="6" stroke-linecap="round" opacity="0.4">
+    <path d="M55 31 C47 23 61 17 53 9"/>
+    <path d="M73 31 C81 23 67 17 78 10 C82 7 81 4 85 3"/>
+  </g>
+  <path d="M33 40 L95 40 L87 90 Q64 104 41 90 Z" fill="#F6F5F0"/>
+  <ellipse cx="64" cy="40" rx="31" ry="8" fill="#F6F5F0"/>
+  <ellipse cx="64" cy="38.5" rx="24" ry="6" fill="#DFA24A"/>
+  <path d="M92 46 C114 46 116 78 88 80" stroke="#F6F5F0" stroke-width="8" stroke-linecap="round" fill="none"/>
+  <path d="M28 98 Q64 116 100 98" stroke="#F6F5F0" stroke-width="7" stroke-linecap="round" fill="none"/>
+</svg>

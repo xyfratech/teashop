@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="kutyo app icon">
+  <!-- App icon source: mint tile + chai cup. Tile radius echoes the app's
+       in-app splash tile (25%). Export at 1024 for launcher icons. -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#D6EFDF"/>
+      <stop offset="1" stop-color="#A9DFBD"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="128" fill="url(#tile)"/>
+
+  <svg x="112" y="96" width="288" height="288" viewBox="0 0 128 128">
+    <g fill="none" stroke="#0C3B29" stroke-width="6" stroke-linecap="round" opacity="0.32">
+      <path d="M55 31 C47 23 61 17 53 9"/>
+      <path d="M73 31 C81 23 67 17 78 10 C82 7 81 4 85 3"/>
+    </g>
+    <path d="M33 40 L95 40 L87 90 Q64 104 41 90 Z" fill="#0C3B29"/>
+    <ellipse cx="64" cy="40" rx="31" ry="8" fill="#0C3B29"/>
+    <ellipse cx="64" cy="38.5" rx="24" ry="6" fill="#DFA24A"/>
+    <path d="M92 46 C114 46 116 78 88 80" stroke="#0C3B29" stroke-width="8" stroke-linecap="round" fill="none"/>
+    <path d="M28 98 Q64 116 100 98" stroke="#0C3B29" stroke-width="7" stroke-linecap="round" fill="none"/>
+  </svg>
+</svg>

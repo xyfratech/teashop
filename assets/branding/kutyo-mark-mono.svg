@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="kutyo">
+  <!-- Single-colour line mark for stamps, watermarks, dark or busy grounds.
+       Uses currentColor; falls back to #0C3B29 as a plain <img>. -->
+  <g color="#0C3B29" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+    <g stroke-width="5" opacity="0.55">
+      <path d="M55 31 C47 23 61 17 53 9"/>
+      <path d="M73 31 C81 23 67 17 78 10 C82 7 81 4 85 3"/>
+    </g>
+    <path d="M34 41 L94 41 L86 89 Q64 102 42 89 Z" stroke-width="7"/>
+    <path d="M35 44 Q64 55 93 44" stroke-width="6"/>
+    <path d="M92 47 C113 47 115 77 88 79" stroke-width="7"/>
+    <path d="M29 97 Q64 114 99 97" stroke-width="6.5"/>
+  </g>
+</svg>
