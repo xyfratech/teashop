@@ -45,6 +45,9 @@ class AppState extends ChangeNotifier {
   String get currency => _store.currency;
   double get openingBalance => _store.openingBalance;
 
+  /// Language menu-item names are displayed in.
+  MenuLang get menuLang => MenuLang.parse(_store.menuLang);
+
   ThemeMode get themeMode {
     switch (_store.themeMode) {
       case 'light':
@@ -348,6 +351,11 @@ class AppState extends ChangeNotifier {
 
   Future<void> setThemeMode(ThemeMode m) async {
     await _store.setThemeMode(m.name);
+    notifyListeners();
+  }
+
+  Future<void> setMenuLang(MenuLang l) async {
+    await _store.setMenuLang(l.name);
     notifyListeners();
   }
 

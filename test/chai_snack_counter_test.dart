@@ -79,6 +79,22 @@ void main() {
     expect(find.text('Tap + to build an order'), findsOneWidget);
   });
 
+  testWidgets('language toggle switches item names to Malayalam',
+      (tester) async {
+    await pump(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Black Tea'), findsOneWidget);
+    expect(find.text('കട്ടൻ ചായ'), findsNothing);
+
+    await tester.tap(find.text('മല'));
+    await tester.pumpAndSettle();
+
+    expect(state.menuLang, MenuLang.ml);
+    expect(find.text('കട്ടൻ ചായ'), findsOneWidget);
+    expect(find.text('Black Tea'), findsNothing);
+  });
+
   testWidgets('shows an empty state when the menu has no active items',
       (tester) async {
     for (final p in state.products) {

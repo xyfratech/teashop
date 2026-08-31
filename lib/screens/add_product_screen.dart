@@ -17,6 +17,7 @@ class AddProductScreen extends StatefulWidget {
 class _AddProductScreenState extends State<AddProductScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _name;
+  late final TextEditingController _nameMl;
   late final TextEditingController _price;
   late final TextEditingController _cost;
   late bool _active;
@@ -28,6 +29,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     super.initState();
     final p = widget.existing;
     _name = TextEditingController(text: p?.name ?? '');
+    _nameMl = TextEditingController(text: p?.nameMl ?? '');
     _price = TextEditingController(text: p == null ? '' : _num(p.price));
     _cost = TextEditingController(text: p == null ? '' : _num(p.cost));
     _active = p?.active ?? true;
@@ -41,6 +43,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   @override
   void dispose() {
     _name.dispose();
+    _nameMl.dispose();
     _price.dispose();
     _cost.dispose();
     super.dispose();
@@ -52,6 +55,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     final product = Product(
       id: widget.existing?.id ?? state.newId(),
       name: _name.text.trim(),
+      nameMl: _nameMl.text.trim(),
       price: double.parse(_price.text.trim()),
       cost: double.tryParse(_cost.text.trim()) ?? 0,
       active: _active,
@@ -122,6 +126,15 @@ class _AddProductScreenState extends State<AddProductScreen> {
               decoration: const InputDecoration(labelText: 'Item name'),
               validator: (v) =>
                   (v == null || v.trim().isEmpty) ? 'Enter a name' : null,
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _nameMl,
+              decoration: const InputDecoration(
+                labelText: 'Malayalam name (optional)',
+                hintText: 'ചായ',
+                helperText: 'Shown when the menu is switched to മല',
+              ),
             ),
             const SizedBox(height: 16),
             Row(

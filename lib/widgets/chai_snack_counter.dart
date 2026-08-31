@@ -6,6 +6,7 @@ import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../utils/context_ext.dart';
 import 'empty_state.dart';
+import 'menu_lang_toggle.dart';
 
 /// Quick sale counter. Every active menu item shows at its preset price; tap
 /// the steppers to set quantities, watch the running bill pinned at the
@@ -68,9 +69,10 @@ class _ChaiSnackCounterState extends State<ChaiSnackCounter> {
     if (_saving || _qty.isEmpty) return;
 
     // Snapshot the human summary before the counts are wiped.
+    final lang = state.menuLang;
     final lines = state.products
         .where((p) => _countFor(p.id) > 0)
-        .map((p) => '${_countFor(p.id)}× ${p.name}')
+        .map((p) => '${_countFor(p.id)}× ${p.displayName(lang)}')
         .join(' · ');
 
     setState(() => _saving = true);
@@ -107,17 +109,35 @@ class _ChaiSnackCounterState extends State<ChaiSnackCounter> {
       );
     }
 
+    final lang = state.menuLang;
     final visible = _query.isEmpty
         ? active
-        : active.where((p) => p.name.toLowerCase().contains(_query)).toList();
+        : active
+            .where((p) =>
+                p.name.toLowerCase().contains(_query) ||
+                p.nameMl.toLowerCase().contains(_query))
+            .toList();
     final showSearch = active.length > 6;
     final total = _total(active);
 
     return Column(
       children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 12, 0),
+          child: Row(
+            children: [
+              Text(
+                'Item names',
+                style: TextStyle(fontSize: 12.5, color: scheme.outline),
+              ),
+              const Spacer(),
+              const MenuLangToggle(),
+            ],
+          ),
+        ),
         if (showSearch)
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
             child: TextField(
               controller: _searchCtrl,
               textInputAction: TextInputAction.search,
@@ -151,7 +171,7 @@ class _ChaiSnackCounterState extends State<ChaiSnackCounter> {
                   children: [
                     for (final p in visible) ...[
                       _ItemCard(
-                        name: p.name,
+                        name: p.displayName(lang),
                         rate: p.price,
                         count: _countFor(p.id),
                         onMinus: _countFor(p.id) == 0

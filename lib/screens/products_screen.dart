@@ -7,6 +7,7 @@ import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../utils/context_ext.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/menu_lang_toggle.dart';
 import 'add_product_screen.dart';
 
 class ProductsScreen extends StatelessWidget {
@@ -16,9 +17,18 @@ class ProductsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final products = state.products;
+    final lang = state.menuLang;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Menu')),
+      appBar: AppBar(
+        title: const Text('Menu'),
+        actions: const [
+          Padding(
+            padding: EdgeInsets.only(right: 12),
+            child: Center(child: MenuLangToggle()),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const AddProductScreen()),
@@ -58,11 +68,13 @@ class ProductsScreen extends StatelessWidget {
                           .colorScheme
                           .primaryContainer,
                       child: Text(
-                        p.name.isNotEmpty ? p.name[0].toUpperCase() : '?',
+                        p.displayName(lang).isNotEmpty
+                            ? p.displayName(lang).characters.first.toUpperCase()
+                            : '?',
                       ),
                     ),
                     title: Text(
-                      p.name,
+                      p.displayName(lang),
                       style: TextStyle(
                         decoration: p.active
                             ? null
@@ -87,6 +99,7 @@ class ProductsScreen extends StatelessWidget {
 
   Future<void> _sell(BuildContext context, Product product) async {
     final state = context.read<AppState>();
+    final name = product.displayName(state.menuLang);
     var qty = 1;
     var method = PayMethod.cash;
 
@@ -106,7 +119,7 @@ class ProductsScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Sell ${product.name}',
+                  'Sell $name',
                   style: Theme.of(ctx).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 4),
@@ -172,7 +185,7 @@ class ProductsScreen extends StatelessWidget {
     await state.quickSale(product, qty: qty, method: method);
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Sale recorded: ${product.name} x$qty')),
+      SnackBar(content: Text('Sale recorded: $name x$qty')),
     );
   }
 }

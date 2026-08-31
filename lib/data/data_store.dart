@@ -65,11 +65,32 @@ class DataStore {
     }
 
     final products = <Product>[
-      Product(id: newId(), name: 'Regular Tea', price: 10, cost: 4),
-      Product(id: newId(), name: 'Special Tea', price: 15, cost: 6),
-      Product(id: newId(), name: 'Black Tea', price: 8, cost: 3),
-      Product(id: newId(), name: 'Coffee', price: 20, cost: 8),
-      Product(id: newId(), name: 'Green Tea', price: 25, cost: 10),
+      Product(
+          id: newId(),
+          name: 'Regular Tea',
+          nameMl: 'ചായ',
+          price: 10,
+          cost: 4),
+      Product(
+          id: newId(),
+          name: 'Special Tea',
+          nameMl: 'സ്പെഷ്യൽ ചായ',
+          price: 15,
+          cost: 6),
+      Product(
+          id: newId(),
+          name: 'Black Tea',
+          nameMl: 'കട്ടൻ ചായ',
+          price: 8,
+          cost: 3),
+      Product(
+          id: newId(), name: 'Coffee', nameMl: 'കാപ്പി', price: 20, cost: 8),
+      Product(
+          id: newId(),
+          name: 'Green Tea',
+          nameMl: 'ഗ്രീൻ ടീ',
+          price: 25,
+          cost: 10),
     ];
     for (final p in products) {
       await _products.put(p.id, p.toMap());
@@ -89,6 +110,10 @@ class DataStore {
 
   String get themeMode => _meta.get('themeMode', defaultValue: 'system') as String;
   Future<void> setThemeMode(String v) => _meta.put('themeMode', v);
+
+  /// Language for menu-item names: 'en' or 'ml'.
+  String get menuLang => _meta.get('menuLang', defaultValue: 'en') as String;
+  Future<void> setMenuLang(String v) => _meta.put('menuLang', v);
 
   // --- SaaS licence cache (so a paid shop is not locked out when offline) ---
   Map<String, dynamic>? cachedShop() {
