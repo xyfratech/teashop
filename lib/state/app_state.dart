@@ -45,9 +45,6 @@ class AppState extends ChangeNotifier {
   String get currency => _store.currency;
   double get openingBalance => _store.openingBalance;
 
-  double get chaiRate => _store.chaiRate;
-  double get snackRate => _store.snackRate;
-
   ThemeMode get themeMode {
     switch (_store.themeMode) {
       case 'light':
@@ -269,6 +266,41 @@ class AppState extends ChangeNotifier {
     return t;
   }
 
+  /// Rings up a whole order from the Chai & snack quick counter: one income
+  /// [Txn] per menu line (so per-product reports stay honest), every row filed
+  /// under the "Tea Sales" bucket, with a single reload at the end. Zero and
+  /// unknown product ids are skipped. Returns the bill total.
+  Future<double> recordSaleBatch(
+    Map<String, int> qtyByProductId, {
+    PayMethod method = PayMethod.cash,
+  }) async {
+    final cat = incomeCategoryFor('tea');
+    var total = 0.0;
+    for (final entry in qtyByProductId.entries) {
+      final qty = entry.value;
+      if (qty <= 0) continue;
+      final p = productById(entry.key);
+      if (p == null) continue;
+      final amount = p.price * qty;
+      total += amount;
+      final t = Txn(
+        id: newId(),
+        type: TxnType.income,
+        amount: amount,
+        categoryId: cat.id,
+        note: '${p.name} x$qty',
+        date: DateTime.now(),
+        method: method,
+        quantity: qty,
+        productId: p.id,
+      );
+      await _store.putTxn(t);
+      await _ledger?.enqueueUpsert(ledgerRow(t));
+    }
+    await load();
+    return total;
+  }
+
   Future<void> addProduct(Product p) async {
     await _store.putProduct(p);
     await load();
@@ -311,16 +343,6 @@ class AppState extends ChangeNotifier {
 
   Future<void> setOpeningBalance(double v) async {
     await _store.setOpeningBalance(v);
-    notifyListeners();
-  }
-
-  Future<void> setChaiRate(double v) async {
-    await _store.setChaiRate(v);
-    notifyListeners();
-  }
-
-  Future<void> setSnackRate(double v) async {
-    await _store.setSnackRate(v);
     notifyListeners();
   }
 

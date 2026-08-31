@@ -61,30 +61,6 @@ class SettingsScreen extends StatelessWidget {
             ),
           ),
           const Divider(height: 24),
-          const _Heading('Quick bill rates'),
-          ListTile(
-            leading: const Icon(Icons.local_cafe_outlined),
-            title: const Text('Chai rate'),
-            subtitle: Text('${money.format(state.chaiRate)} per cup'),
-            onTap: () => _editNumber(
-              context,
-              title: 'Chai rate',
-              initial: state.chaiRate,
-              onSave: state.setChaiRate,
-            ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.bakery_dining_outlined),
-            title: const Text('Snack rate'),
-            subtitle: Text('${money.format(state.snackRate)} per item'),
-            onTap: () => _editNumber(
-              context,
-              title: 'Snack rate',
-              initial: state.snackRate,
-              onSave: state.setSnackRate,
-            ),
-          ),
-          const Divider(height: 24),
           const _Heading('Organise'),
           ListTile(
             leading: const Icon(Icons.category_outlined),

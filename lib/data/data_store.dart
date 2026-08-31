@@ -87,15 +87,6 @@ class DataStore {
       (_meta.get('openingBalance', defaultValue: 0.0) as num).toDouble();
   Future<void> setOpeningBalance(double v) => _meta.put('openingBalance', v);
 
-  /// Preset unit prices for the Chai & snack quick-bill counter.
-  double get chaiRate =>
-      (_meta.get('chaiRate', defaultValue: 10.0) as num).toDouble();
-  Future<void> setChaiRate(double v) => _meta.put('chaiRate', v);
-
-  double get snackRate =>
-      (_meta.get('snackRate', defaultValue: 15.0) as num).toDouble();
-  Future<void> setSnackRate(double v) => _meta.put('snackRate', v);
-
   String get themeMode => _meta.get('themeMode', defaultValue: 'system') as String;
   Future<void> setThemeMode(String v) => _meta.put('themeMode', v);
 

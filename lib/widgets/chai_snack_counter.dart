@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-import '../models/app_enums.dart';
+import '../models/product.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../utils/context_ext.dart';
+import '../utils/formatters.dart';
+import 'empty_state.dart';
 
-/// Preset chai + snack unit prices, pick how many of each with the steppers,
-/// see the running bill, and drop the total into the account as one income
-/// entry (filed under "Tea Sales").
+/// Quick sale counter. Every active menu item shows at its preset price; tap
+/// the steppers to set quantities, watch the running bill, then post the whole
+/// order to the account as itemised "Tea Sales" income (one entry per line).
 class ChaiSnackCounter extends StatefulWidget {
   const ChaiSnackCounter({super.key});
 
@@ -18,211 +19,158 @@ class ChaiSnackCounter extends StatefulWidget {
 }
 
 class _ChaiSnackCounterState extends State<ChaiSnackCounter> {
-  int _chai = 0;
-  int _snack = 0;
+  /// productId -> quantity. Only holds rows with a count of 1 or more.
+  final Map<String, int> _qty = {};
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _query = '';
   bool _saving = false;
 
-  static String _plain(double v) {
-    final s = v.toStringAsFixed(2);
-    return s.endsWith('.00') ? s.substring(0, s.length - 3) : s;
+  @override
+  void initState() {
+    super.initState();
+    _searchCtrl.addListener(
+      () => setState(() => _query = _searchCtrl.text.trim().toLowerCase()),
+    );
   }
 
-  String get _counts => '$_chai chai · $_snack snack';
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
 
-  void _reset() => setState(() {
-        _chai = 0;
-        _snack = 0;
-      });
+  int _countFor(String id) => _qty[id] ?? 0;
 
-  Future<void> _add(AppState state, double total) async {
-    setState(() => _saving = true);
-    final parts = <String>[
-      if (_chai > 0) '$_chai chai',
-      if (_snack > 0) '$_snack snack',
-    ];
-    await state.addQuickEntry(
-      type: TxnType.income,
-      amount: total,
-      note: parts.join(' · '),
-      categoryId: state.incomeCategoryFor('tea').id,
-    );
-    if (!mounted) return;
-    final label = context.money.format(total);
+  int get _itemCount => _qty.values.fold(0, (s, n) => s + n);
+
+  void _bump(String id, int delta) {
     setState(() {
-      _saving = false;
-      _chai = 0;
-      _snack = 0;
+      final next = (_countFor(id) + delta).clamp(0, 999);
+      if (next == 0) {
+        _qty.remove(id);
+      } else {
+        _qty[id] = next;
+      }
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Added $label · ${parts.join(', ')}')),
-    );
   }
 
-  Future<void> _editRates(AppState state) async {
-    final chai = TextEditingController(text: _plain(state.chaiRate));
-    final snack = TextEditingController(text: _plain(state.snackRate));
-    final formatters = [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))];
-    const kbd = TextInputType.numberWithOptions(decimal: true);
+  void _clear() => setState(_qty.clear);
 
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Edit rates'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: chai,
-              autofocus: true,
-              keyboardType: kbd,
-              inputFormatters: formatters,
-              decoration: InputDecoration(
-                labelText: 'Chai rate',
-                prefixText: '${state.currency} ',
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: snack,
-              keyboardType: kbd,
-              inputFormatters: formatters,
-              decoration: InputDecoration(
-                labelText: 'Snack rate',
-                prefixText: '${state.currency} ',
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
-
-    if (ok == true) {
-      final c = double.tryParse(chai.text.trim());
-      final s = double.tryParse(snack.text.trim());
-      if (c != null && c > 0) await state.setChaiRate(c);
-      if (s != null && s > 0) await state.setSnackRate(s);
+  double _total(List<Product> products) {
+    var t = 0.0;
+    for (final p in products) {
+      t += p.price * _countFor(p.id);
     }
-    chai.dispose();
-    snack.dispose();
+    return t;
+  }
+
+  Future<void> _submit(AppState state) async {
+    if (_saving || _qty.isEmpty) return;
+
+    // Snapshot the human summary before the counts are wiped.
+    final lines = state.products
+        .where((p) => _countFor(p.id) > 0)
+        .map((p) => '${_countFor(p.id)}× ${p.name}')
+        .join(' · ');
+
+    setState(() => _saving = true);
+    double total;
+    try {
+      total = await state.recordSaleBatch(Map<String, int>.of(_qty));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+    if (!mounted) return;
+
+    setState(_qty.clear);
+    final label = context.money.format(total);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text('Added $label to account  ·  $lines')),
+      );
   }
 
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    final money = context.money;
     final scheme = Theme.of(context).colorScheme;
+    final money = context.money;
 
-    final chaiTotal = _chai * state.chaiRate;
-    final snackTotal = _snack * state.snackRate;
-    final total = chaiTotal + snackTotal;
+    final active = state.products.where((p) => p.active).toList();
+
+    if (active.isEmpty) {
+      return const EmptyState(
+        icon: Icons.local_cafe_outlined,
+        title: 'No menu items yet',
+        message: 'Add your teas and snacks with their prices on the Menu tab, '
+            'then come back here to ring up an order.',
+      );
+    }
+
+    final visible = _query.isEmpty
+        ? active
+        : active.where((p) => p.name.toLowerCase().contains(_query)).toList();
+    final showSearch = active.length > 6;
+    final total = _total(active);
 
     return Column(
       children: [
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            children: [
-              _ItemRow(
-                icon: Icons.local_cafe,
-                label: 'Chai',
-                rate: state.chaiRate,
-                count: _chai,
-                lineTotal: chaiTotal,
-                onMinus: _chai == 0 ? null : () => setState(() => _chai--),
-                onPlus: () => setState(() => _chai++),
-              ),
-              const SizedBox(height: 12),
-              _ItemRow(
-                icon: Icons.bakery_dining,
-                label: 'Snack',
-                rate: state.snackRate,
-                count: _snack,
-                lineTotal: snackTotal,
-                onMinus: _snack == 0 ? null : () => setState(() => _snack--),
-                onPlus: () => setState(() => _snack++),
-              ),
-              const SizedBox(height: 4),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton.icon(
-                  onPressed: () => _editRates(state),
-                  icon: const Icon(Icons.tune, size: 18),
-                  label: const Text('Edit rates'),
-                ),
-              ),
-            ],
-          ),
-        ),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 34),
-          decoration: BoxDecoration(
-            color: scheme.surface,
-            border: Border(top: BorderSide(color: scheme.outlineVariant)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  Text('Total',
-                      style: Theme.of(context).textTheme.titleMedium),
-                  const Spacer(),
-                  Text(
-                    money.format(total),
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: total > 0 ? AppTheme.income : scheme.outline,
-                        ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 2),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  total == 0 ? 'Tap + to build a bill' : _counts,
-                  style: TextStyle(color: scheme.outline),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  OutlinedButton(
-                    onPressed: (total == 0 || _saving) ? null : _reset,
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(52),
-                    ),
-                    child: const Text('Clear'),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: (total <= 0 || _saving)
-                          ? null
-                          : () => _add(state, total),
-                      icon: const Icon(Icons.check),
-                      label: Text('Add ${money.format(total)} to account'),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppTheme.income,
-                        minimumSize: const Size.fromHeight(52),
+        if (showSearch)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: TextField(
+              controller: _searchCtrl,
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: 'Search menu',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _query.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: _searchCtrl.clear,
                       ),
-                    ),
-                  ),
-                ],
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
-            ],
+            ),
           ),
+        Expanded(
+          child: visible.isEmpty
+              ? Center(
+                  child: Text(
+                    'Nothing on the menu matches "$_query"',
+                    style: TextStyle(color: scheme.outline),
+                  ),
+                )
+              : ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                  itemCount: visible.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 10),
+                  itemBuilder: (_, i) {
+                    final p = visible[i];
+                    final count = _countFor(p.id);
+                    return _ItemRow(
+                      name: p.name,
+                      rate: p.price,
+                      count: count,
+                      lineTotal: p.price * count,
+                      onMinus: count == 0 ? null : () => _bump(p.id, -1),
+                      onPlus: () => _bump(p.id, 1),
+                    );
+                  },
+                ),
+        ),
+        _BillBar(
+          total: total,
+          itemCount: _itemCount,
+          money: money,
+          busy: _saving,
+          onClear: (_itemCount == 0 || _saving) ? null : _clear,
+          onAdd: (total <= 0 || _saving) ? null : () => _submit(state),
         ),
       ],
     );
@@ -231,8 +179,7 @@ class _ChaiSnackCounterState extends State<ChaiSnackCounter> {
 
 class _ItemRow extends StatelessWidget {
   const _ItemRow({
-    required this.icon,
-    required this.label,
+    required this.name,
     required this.rate,
     required this.count,
     required this.lineTotal,
@@ -240,8 +187,7 @@ class _ItemRow extends StatelessWidget {
     required this.onPlus,
   });
 
-  final IconData icon;
-  final String label;
+  final String name;
   final double rate;
   final int count;
   final double lineTotal;
@@ -252,22 +198,33 @@ class _ItemRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final money = context.money;
+    final selected = count > 0;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: scheme.surface,
+        color: selected
+            ? scheme.primaryContainer.withValues(alpha: 0.25)
+            : scheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: scheme.outlineVariant),
+        border: Border.all(
+          color: selected ? scheme.primary : scheme.outlineVariant,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(icon, color: scheme.primary),
+              Icon(Icons.local_cafe, color: scheme.primary, size: 20),
               const SizedBox(width: 8),
-              Text(label, style: Theme.of(context).textTheme.titleMedium),
-              const Spacer(),
+              Expanded(
+                child: Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
               Text('${money.format(rate)} each',
                   style: TextStyle(color: scheme.outline)),
             ],
@@ -289,9 +246,104 @@ class _ItemRow extends StatelessWidget {
               SizedBox(
                 width: 84,
                 child: Text(
-                  money.format(lineTotal),
+                  selected ? money.format(lineTotal) : '—',
                   textAlign: TextAlign.right,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: selected ? scheme.onSurface : scheme.outline,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BillBar extends StatelessWidget {
+  const _BillBar({
+    required this.total,
+    required this.itemCount,
+    required this.money,
+    required this.busy,
+    required this.onClear,
+    required this.onAdd,
+  });
+
+  final double total;
+  final int itemCount;
+  final Money money;
+  final bool busy;
+  final VoidCallback? onClear;
+  final VoidCallback? onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 34),
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        border: Border(top: BorderSide(color: scheme.outlineVariant)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Text('Total', style: Theme.of(context).textTheme.titleMedium),
+              const Spacer(),
+              Text(
+                money.format(total),
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: total > 0 ? AppTheme.income : scheme.outline,
+                    ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              itemCount == 0
+                  ? 'Tap + to build an order'
+                  : '$itemCount item${itemCount == 1 ? '' : 's'} in this order',
+              style: TextStyle(color: scheme.outline),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              OutlinedButton(
+                onPressed: onClear,
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52),
+                ),
+                child: const Text('Clear'),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: onAdd,
+                  icon: busy
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.check),
+                  label: Text(
+                    busy ? 'Adding…' : 'Add ${money.format(total)} to account',
+                  ),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppTheme.income,
+                    minimumSize: const Size.fromHeight(52),
+                  ),
                 ),
               ),
             ],
