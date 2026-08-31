@@ -1,0 +1,3 @@
+# Shell scripts must stay LF-only so they run in the Linux CI/Vercel container.
+*.sh text eol=lf
+vercel_build.sh text eol=lf
