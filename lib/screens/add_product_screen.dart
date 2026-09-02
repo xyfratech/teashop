@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../models/product.dart';
 import '../state/app_state.dart';
+import '../utils/transliterate.dart';
 
 class AddProductScreen extends StatefulWidget {
   const AddProductScreen({super.key, this.existing});
@@ -22,6 +25,13 @@ class _AddProductScreenState extends State<AddProductScreen> {
   late final TextEditingController _cost;
   late bool _active;
 
+  /// Auto-transliteration of the English name into Malayalam. We only ever
+  /// overwrite the Malayalam field while it still holds the last value we put
+  /// there (tracked in [_autoMl]) — once the user edits it by hand, it's theirs.
+  Timer? _mlDebounce;
+  bool _mlBusy = false;
+  String _autoMl = '';
+
   bool get _isEditing => widget.existing != null;
 
   @override
@@ -33,6 +43,42 @@ class _AddProductScreenState extends State<AddProductScreen> {
     _price = TextEditingController(text: p == null ? '' : _num(p.price));
     _cost = TextEditingController(text: p == null ? '' : _num(p.cost));
     _active = p?.active ?? true;
+    _name.addListener(_onNameChanged);
+  }
+
+  void _onNameChanged() {
+    _mlDebounce?.cancel();
+    _mlDebounce =
+        Timer(const Duration(milliseconds: 500), () => _fillMalayalam());
+  }
+
+  /// Fetches the Malayalam spelling for the current English name and drops it
+  /// into the Malayalam field. [force] ignores the "user edited it" guard — used
+  /// by the convert button next to the field.
+  Future<void> _fillMalayalam({bool force = false}) async {
+    final src = _name.text.trim();
+    final untouched = _nameMl.text.isEmpty || _nameMl.text == _autoMl;
+    if (!force && !untouched) return;
+
+    if (src.isEmpty) {
+      if (untouched && _nameMl.text.isNotEmpty) {
+        _nameMl.clear();
+        _autoMl = '';
+      }
+      return;
+    }
+
+    setState(() => _mlBusy = true);
+    final ml = await transliterateToMalayalam(src);
+    if (!mounted) return;
+    setState(() {
+      _mlBusy = false;
+      final canWrite = force || _nameMl.text.isEmpty || _nameMl.text == _autoMl;
+      if (ml != null && canWrite) {
+        _nameMl.text = ml;
+        _autoMl = ml;
+      }
+    });
   }
 
   static String _num(double v) {
@@ -42,6 +88,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
   @override
   void dispose() {
+    _mlDebounce?.cancel();
+    _name.removeListener(_onNameChanged);
     _name.dispose();
     _nameMl.dispose();
     _price.dispose();
@@ -130,10 +178,25 @@ class _AddProductScreenState extends State<AddProductScreen> {
             const SizedBox(height: 16),
             TextFormField(
               controller: _nameMl,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Malayalam name (optional)',
                 hintText: 'ചായ',
-                helperText: 'Shown when the menu is switched to മല',
+                helperText: 'Auto-filled from the name above · shown when the '
+                    'menu is switched to മല',
+                suffixIcon: _mlBusy
+                    ? const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : IconButton(
+                        icon: const Icon(Icons.translate),
+                        tooltip: 'Convert name to Malayalam',
+                        onPressed: () => _fillMalayalam(force: true),
+                      ),
               ),
             ),
             const SizedBox(height: 16),
