@@ -4,6 +4,7 @@ class AppTheme {
   static const Color seed = Color(0xFF2E6B4F); // steeped-tea green
   static const Color income = Color(0xFF2E7D32);
   static const Color expense = Color(0xFFC62828);
+  static const Color tick = Color(0xFF1565C0); // "add to account" blue
 
   static ThemeData light() => _base(Brightness.light);
   static ThemeData dark() => _base(Brightness.dark);

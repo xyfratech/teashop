@@ -52,7 +52,9 @@ class SupabaseConfig {
   /// Shown to shops when their subscription lapses. Put your real UPI id /
   /// WhatsApp number here.
   static const String supportUpiId = 'your-upi@bank';
-  static const String supportContact = '+91 00000 00000';
+
+  /// Customer-care WhatsApp number (shown in Settings and on the lock screen).
+  static const String supportContact = '+91 73063 24011';
 
   static const int trialDays = 14;
 }

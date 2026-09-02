@@ -97,6 +97,16 @@ void main() {
     expect(e.showTick, isTrue);
   });
 
+  test('= (or the tick) with a dangling operator keeps the running total', () {
+    final e = CalcEngine();
+    type(e, '10+10=');
+    expect(e.value, 20);
+    e.setOperator('+'); // "20 +" with nothing typed after
+    e.equals(); // must stay 20, not 40
+    expect(e.value, 20);
+    expect(e.showTick, isTrue);
+  });
+
   test('only one decimal point per number', () {
     final e = CalcEngine();
     type(e, '1');

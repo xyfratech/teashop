@@ -82,10 +82,19 @@ class CalcEngine {
   }
 
   void equals() {
-    if (_op != null && _acc != null) {
-      final b = _entry.isNotEmpty ? double.parse(_entry) : _acc!;
+    if (_op != null && _acc != null && _entry.isNotEmpty) {
+      final b = double.parse(_entry);
       _history = '${format(_acc!)} $_op ${format(b)} =';
       _acc = _apply(_acc!, b, _op!);
+      _op = null;
+      _entry = '';
+      _justEvaluated = true;
+    } else if (_op != null && _acc != null) {
+      // A dangling operator with nothing typed after it — e.g. "20 +" then `=`
+      // or the tick. There's no second operand, so settle on the running total
+      // instead of applying the operator to the accumulator itself (which would
+      // double / square it).
+      _history = '${format(_acc!)} =';
       _op = null;
       _entry = '';
       _justEvaluated = true;

@@ -22,7 +22,24 @@ enum _CalcMode { keypad, chaiSnack }
 
 class _CalculatorScreenState extends State<CalculatorScreen> {
   final CalcEngine _calc = CalcEngine();
+  final PageController _pageCtrl = PageController();
   _CalcMode _mode = _CalcMode.keypad;
+
+  @override
+  void dispose() {
+    _pageCtrl.dispose();
+    super.dispose();
+  }
+
+  /// Move to a section from the top toggle — the page slides across to match.
+  void _goTo(_CalcMode mode) {
+    setState(() => _mode = mode);
+    _pageCtrl.animateToPage(
+      mode.index,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+    );
+  }
 
   double get _value => _calc.value;
   String get _display => _calc.display;
@@ -72,170 +89,208 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
       appBar: AppBar(
         title: const Text('Calculator'),
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(56),
+          preferredSize: const Size.fromHeight(66),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
             child: SegmentedButton<_CalcMode>(
+              showSelectedIcon: false,
+              style: SegmentedButton.styleFrom(
+                textStyle: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 12,
+                ),
+              ),
               segments: const [
                 ButtonSegment(
                   value: _CalcMode.keypad,
                   label: Text('Keypad'),
-                  icon: Icon(Icons.calculate_outlined),
+                  icon: Icon(Icons.dialpad, size: 24),
                 ),
                 ButtonSegment(
                   value: _CalcMode.chaiSnack,
                   label: Text('Chai & snack'),
-                  icon: Icon(Icons.local_cafe_outlined),
+                  icon: Icon(Icons.local_cafe_outlined, size: 24),
                 ),
               ],
               selected: {_mode},
-              onSelectionChanged: (s) => setState(() => _mode = s.first),
+              onSelectionChanged: (s) => _goTo(s.first),
             ),
           ),
         ),
       ),
       body: SafeArea(
-        child: _mode == _CalcMode.chaiSnack
-            ? const ChaiSnackCounter()
-            : Column(
+        child: PageView(
+          // Swipe left/right to move between the keypad and the chai & snack
+          // counter; the top toggle stays in sync.
+          controller: _pageCtrl,
+          onPageChanged: (i) => setState(() => _mode = _CalcMode.values[i]),
           children: [
-            // ---- display ----
-            Expanded(
-              flex: 2,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-                alignment: Alignment.bottomRight,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Row(
+            Column(
+              children: [
+                // ---- display ----
+                Expanded(
+                  flex: 2,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                    alignment: Alignment.bottomRight,
+                    child: Column(
                       mainAxisAlignment: MainAxisAlignment.end,
+                      crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Text(
-                          'Account balance  ',
-                          style: TextStyle(color: scheme.outline),
-                        ),
-                        AmountText(
-                          balance,
-                          style: const TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                      ],
-                    ),
-                    const Spacer(),
-                    Text(
-                      _history,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 18, color: scheme.outline),
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Text(
-                          '$currency ',
-                          style: TextStyle(
-                            fontSize: 24,
-                            color: scheme.outline,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        Expanded(
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerRight,
-                            child: Text(
-                              _display,
-                              maxLines: 1,
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            Text(
+                              'Account balance  ',
+                              style: TextStyle(color: scheme.outline),
+                            ),
+                            AmountText(
+                              balance,
                               style: const TextStyle(
-                                fontSize: 56,
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
+                          ],
+                        ),
+                        const Spacer(),
+                        Text(
+                          _history,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 18, color: scheme.outline),
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Text(
+                              '$currency ',
+                              style: TextStyle(
+                                fontSize: 24,
+                                color: scheme.outline,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Expanded(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerRight,
+                                child: Text(
+                                  _display,
+                                  maxLines: 1,
+                                  style: const TextStyle(
+                                    fontSize: 56,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        AnimatedOpacity(
+                          duration: const Duration(milliseconds: 150),
+                          opacity: _showTick ? 1 : 0,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              Icon(
+                                Icons.check_circle,
+                                size: 16,
+                                color: AppTheme.tick,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Tap the tick to add $currency ${_fmt(_value)} '
+                                'to your account',
+                                style: TextStyle(
+                                  color: AppTheme.tick,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    AnimatedOpacity(
-                      duration: const Duration(milliseconds: 150),
-                      opacity: _showTick ? 1 : 0,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          Icon(Icons.check_circle,
-                              size: 16, color: AppTheme.income),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Tap the tick to add $currency ${_fmt(_value)} '
-                            'to your account',
-                            style: TextStyle(
-                              color: AppTheme.income,
-                              fontWeight: FontWeight.w600,
-                            ),
+                  ),
+                ),
+                const Divider(height: 1),
+                // ---- keypad ----
+                Expanded(
+                  flex: 5,
+                  child: Padding(
+                    // extra bottom room so the docked centre nav button never
+                    // sits over the last key row
+                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 34),
+                    child: Column(
+                      children: [
+                        _row([
+                          _Key('C', kind: _KeyKind.function, onTap: _clear),
+                          _Key.icon(
+                            Icons.backspace_outlined,
+                            kind: _KeyKind.function,
+                            onTap: _backspace,
                           ),
-                        ],
-                      ),
+                          _Key('%', kind: _KeyKind.function, onTap: _percent),
+                          _Key(
+                            '÷',
+                            kind: _KeyKind.operator,
+                            onTap: () => _tapOperator('÷'),
+                          ),
+                        ]),
+                        _row([
+                          _Key('7', onTap: () => _tapDigit('7')),
+                          _Key('8', onTap: () => _tapDigit('8')),
+                          _Key('9', onTap: () => _tapDigit('9')),
+                          _Key(
+                            '×',
+                            kind: _KeyKind.operator,
+                            onTap: () => _tapOperator('×'),
+                          ),
+                        ]),
+                        _row([
+                          _Key('4', onTap: () => _tapDigit('4')),
+                          _Key('5', onTap: () => _tapDigit('5')),
+                          _Key('6', onTap: () => _tapDigit('6')),
+                          _Key(
+                            '−',
+                            kind: _KeyKind.operator,
+                            onTap: () => _tapOperator('−'),
+                          ),
+                        ]),
+                        _row([
+                          _Key('1', onTap: () => _tapDigit('1')),
+                          _Key('2', onTap: () => _tapDigit('2')),
+                          _Key('3', onTap: () => _tapDigit('3')),
+                          _Key(
+                            '+',
+                            kind: _KeyKind.operator,
+                            onTap: () => _tapOperator('+'),
+                          ),
+                        ]),
+                        _row([
+                          _Key('0', onTap: () => _tapDigit('0')),
+                          _Key('.', onTap: () => _tapDigit('.')),
+                          _Key('=', kind: _KeyKind.equals, onTap: _equals),
+                          _Key.icon(
+                            Icons.check,
+                            kind: _KeyKind.tick,
+                            onTap: _canAdd ? _addToAccount : null,
+                          ),
+                        ]),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
-            const Divider(height: 1),
-            // ---- keypad ----
-            Expanded(
-              flex: 5,
-              child: Padding(
-                // extra bottom room so the docked centre nav button never
-                // sits over the last key row
-                padding: const EdgeInsets.fromLTRB(8, 8, 8, 34),
-                child: Column(
-                  children: [
-                    _row([
-                      _Key('C', kind: _KeyKind.function, onTap: _clear),
-                      _Key.icon(Icons.backspace_outlined,
-                          kind: _KeyKind.function, onTap: _backspace),
-                      _Key('%', kind: _KeyKind.function, onTap: _percent),
-                      _Key('÷', kind: _KeyKind.operator,
-                          onTap: () => _tapOperator('÷')),
-                    ]),
-                    _row([
-                      _Key('7', onTap: () => _tapDigit('7')),
-                      _Key('8', onTap: () => _tapDigit('8')),
-                      _Key('9', onTap: () => _tapDigit('9')),
-                      _Key('×', kind: _KeyKind.operator,
-                          onTap: () => _tapOperator('×')),
-                    ]),
-                    _row([
-                      _Key('4', onTap: () => _tapDigit('4')),
-                      _Key('5', onTap: () => _tapDigit('5')),
-                      _Key('6', onTap: () => _tapDigit('6')),
-                      _Key('−', kind: _KeyKind.operator,
-                          onTap: () => _tapOperator('−')),
-                    ]),
-                    _row([
-                      _Key('1', onTap: () => _tapDigit('1')),
-                      _Key('2', onTap: () => _tapDigit('2')),
-                      _Key('3', onTap: () => _tapDigit('3')),
-                      _Key('+', kind: _KeyKind.operator,
-                          onTap: () => _tapOperator('+')),
-                    ]),
-                    _row([
-                      _Key('0', onTap: () => _tapDigit('0')),
-                      _Key('.', onTap: () => _tapDigit('.')),
-                      _Key('=', kind: _KeyKind.equals, onTap: _equals),
-                      _Key.icon(
-                        Icons.check,
-                        kind: _KeyKind.tick,
-                        onTap: _canAdd ? _addToAccount : null,
-                      ),
-                    ]),
-                  ],
-                ),
-              ),
-            ),
+            const ChaiSnackCounter(),
           ],
         ),
       ),
@@ -248,17 +303,11 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
 enum _KeyKind { number, operator, equals, function, tick }
 
 class _Key extends StatelessWidget {
-  const _Key(
-    this.label, {
-    this.kind = _KeyKind.number,
-    required this.onTap,
-  }) : icon = null;
+  const _Key(this.label, {this.kind = _KeyKind.number, required this.onTap})
+    : icon = null;
 
-  const _Key.icon(
-    this.icon, {
-    this.kind = _KeyKind.number,
-    required this.onTap,
-  }) : label = null;
+  const _Key.icon(this.icon, {this.kind = _KeyKind.number, required this.onTap})
+    : label = null;
 
   final String? label;
   final IconData? icon;
@@ -283,7 +332,7 @@ class _Key extends StatelessWidget {
         bg = scheme.primary;
         fg = scheme.onPrimary;
       case _KeyKind.tick:
-        bg = AppTheme.income;
+        bg = AppTheme.tick;
         fg = Colors.white;
       case _KeyKind.function:
         bg = scheme.secondaryContainer;
@@ -305,8 +354,11 @@ class _Key extends StatelessWidget {
               onTap: onTap,
               child: Center(
                 child: icon != null
-                    ? Icon(icon,
-                        color: fg, size: kind == _KeyKind.tick ? 30 : 24)
+                    ? Icon(
+                        icon,
+                        color: fg,
+                        size: kind == _KeyKind.tick ? 30 : 24,
+                      )
                     : Text(
                         label!,
                         style: TextStyle(

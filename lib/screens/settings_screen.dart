@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../admin/ledger_sync.dart';
 import '../admin/license_service.dart';
 import '../admin/screens/shop_status_chip.dart';
+import '../admin/supabase_config.dart';
 import '../state/app_state.dart';
 import '../utils/context_ext.dart';
 import 'categories_screen.dart';
@@ -116,6 +118,20 @@ class SettingsScreen extends StatelessWidget {
             value: money.format(state.balance),
           ),
           _StatRow(label: 'Entries recorded', value: '${state.txns.length}'),
+          const Divider(height: 24),
+          const _Heading('Help'),
+          ListTile(
+            leading: const Icon(Icons.support_agent),
+            title: const Text(
+              'Customer care',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            subtitle: const Text(
+              '${SupabaseConfig.supportContact} · chat on WhatsApp',
+            ),
+            trailing: const Icon(Icons.chat_outlined),
+            onTap: () => _openWhatsApp(context),
+          ),
           const Divider(height: 24),
           const _Heading('Danger zone'),
           ListTile(
@@ -239,6 +255,19 @@ class SettingsScreen extends StatelessWidget {
               ),
           ],
         ),
+      ),
+    );
+  }
+
+  Future<void> _openWhatsApp(BuildContext context) async {
+    final digits =
+        SupabaseConfig.supportContact.replaceAll(RegExp(r'[^0-9]'), '');
+    final uri = Uri.parse('https://wa.me/$digits');
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (ok || !context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Could not open WhatsApp · ${SupabaseConfig.supportContact}'),
       ),
     );
   }
