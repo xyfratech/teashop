@@ -56,5 +56,6 @@ class SupabaseConfig {
   /// Customer-care WhatsApp number (shown in Settings and on the lock screen).
   static const String supportContact = '+91 73063 24011';
 
-  static const int trialDays = 14;
+  /// Default free-trial length for a newly registered shop: 1 week.
+  static const int trialDays = 7;
 }

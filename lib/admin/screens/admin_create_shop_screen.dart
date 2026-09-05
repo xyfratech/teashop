@@ -23,6 +23,11 @@ class _AdminCreateShopScreenState extends State<AdminCreateShopScreen> {
   final _trialDays =
       TextEditingController(text: '${SupabaseConfig.trialDays}');
 
+  /// true = shop starts on a free trial (default); false = admin activates it
+  /// as paid right away, skipping the trial entirely.
+  bool _onTrial = true;
+  int _activateMonths = 1;
+
   bool _busy = false;
 
   @override
@@ -38,16 +43,30 @@ class _AdminCreateShopScreenState extends State<AdminCreateShopScreen> {
     if (!_formKey.currentState!.validate()) return;
     FocusScope.of(context).unfocus();
     setState(() => _busy = true);
+    final service = context.read<LicenseService>();
     try {
-      final shop = await context.read<LicenseService>().adminRegisterShop(
-            loginId: _loginId.text,
-            shopName: _shopName.text,
-            ownerName: _ownerName.text,
-            trialDays: int.tryParse(_trialDays.text.trim()) ??
-                SupabaseConfig.trialDays,
-          );
+      var shop = await service.adminRegisterShop(
+        loginId: _loginId.text,
+        shopName: _shopName.text,
+        ownerName: _ownerName.text,
+        // Skipping the trial means zero free days — the follow-up extend
+        // below is what actually gives the shop paid time.
+        trialDays: _onTrial
+            ? (int.tryParse(_trialDays.text.trim()) ?? SupabaseConfig.trialDays)
+            : 0,
+      );
+      String? activateError;
+      if (!_onTrial) {
+        try {
+          shop = await service.adminExtend(shop.id, _activateMonths);
+        } catch (e) {
+          // The login still exists — just tell the admin to activate it
+          // manually from the shop's page instead of losing the login id.
+          activateError = '$e'.replaceFirst('Exception: ', '');
+        }
+      }
       if (!mounted) return;
-      await _showResult(shop);
+      await _showResult(shop, activateError: activateError);
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
@@ -59,7 +78,7 @@ class _AdminCreateShopScreenState extends State<AdminCreateShopScreen> {
     }
   }
 
-  Future<void> _showResult(Shop shop) {
+  Future<void> _showResult(Shop shop, {String? activateError}) {
     final id = shop.username ?? _loginId.text.trim();
     return showDialog<void>(
       context: context,
@@ -76,6 +95,14 @@ class _AdminCreateShopScreenState extends State<AdminCreateShopScreen> {
             _CopyField(label: 'Login ID', value: id),
             const SizedBox(height: 6),
             _CopyField(label: 'Shop', value: shop.name),
+            if (activateError != null) ...[
+              const SizedBox(height: 14),
+              Text(
+                'Created, but activation failed: $activateError\n'
+                'Open the shop and use "Renew subscription" to activate it.',
+                style: TextStyle(color: Theme.of(ctx).colorScheme.error),
+              ),
+            ],
           ],
         ),
         actions: [
@@ -154,17 +181,57 @@ class _AdminCreateShopScreenState extends State<AdminCreateShopScreen> {
                 ),
               ),
               const SizedBox(height: 14),
-              TextFormField(
-                controller: _trialDays,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: const InputDecoration(
-                  labelText: 'Free days before expiry',
-                  prefixIcon: Icon(Icons.event_outlined),
+              Card(
+                margin: EdgeInsets.zero,
+                child: Column(
+                  children: [
+                    SwitchListTile(
+                      value: _onTrial,
+                      onChanged: (v) => setState(() => _onTrial = v),
+                      secondary: Icon(
+                        _onTrial ? Icons.hourglass_top : Icons.verified_outlined,
+                      ),
+                      title: const Text('Start on a free trial'),
+                      subtitle: Text(
+                        _onTrial
+                            ? 'Free access for a set number of days, then locks until paid'
+                            : 'Skip the trial — activate as paid right away',
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      child: _onTrial
+                          ? TextFormField(
+                              controller: _trialDays,
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
+                              decoration: const InputDecoration(
+                                labelText: 'Trial length (days)',
+                                helperText: 'Defaults to 1 week',
+                                prefixIcon: Icon(Icons.event_outlined),
+                              ),
+                              validator: (v) =>
+                                  int.tryParse((v ?? '').trim()) == null
+                                      ? 'Enter a number'
+                                      : null,
+                            )
+                          : Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [1, 3, 6, 12].map((m) {
+                                return ChoiceChip(
+                                  label: Text('$m month${m == 1 ? '' : 's'}'),
+                                  selected: _activateMonths == m,
+                                  onSelected: (_) =>
+                                      setState(() => _activateMonths = m),
+                                );
+                              }).toList(),
+                            ),
+                    ),
+                  ],
                 ),
-                validator: (v) => int.tryParse((v ?? '').trim()) == null
-                    ? 'Enter a number'
-                    : null,
               ),
               const SizedBox(height: 24),
               FilledButton(

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -12,10 +14,15 @@ import 'admin/supabase_config.dart';
 import 'data/data_store.dart';
 import 'firebase_options.dart';
 import 'state/app_state.dart';
+import 'web/storage_persist.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
+  // Best-effort on web: ask the browser not to evict this site's storage
+  // under disk pressure, so the ledger in IndexedDB stays put. No-op on
+  // native platforms.
+  unawaited(requestPersistentStorage());
 
   try {
     // Firebase owns identity (admin + shop-owner logins).

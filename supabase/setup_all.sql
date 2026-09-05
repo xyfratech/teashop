@@ -177,7 +177,7 @@ $$;
 -- shop links to whoever first signs in with that id).
 create or replace function public.admin_register_shop(
   p_login_id text, p_name text,
-  p_owner_name text default null, p_trial_days int default 14
+  p_owner_name text default null, p_trial_days int default 7
 ) returns public.shops
 language plpgsql security definer set search_path to 'public'
 as $$
@@ -196,8 +196,8 @@ begin
     trim(p_login_id),
     coalesce(nullif(trim(p_name), ''), 'My Tea Shop'),
     nullif(trim(p_owner_name), ''),
-    now() + make_interval(days => greatest(coalesce(p_trial_days, 14), 0)),
-    now() + make_interval(days => greatest(coalesce(p_trial_days, 14), 0))
+    now() + make_interval(days => greatest(coalesce(p_trial_days, 7), 0)),
+    now() + make_interval(days => greatest(coalesce(p_trial_days, 7), 0))
   )
   returning * into result;
   return result;
