@@ -48,7 +48,7 @@ class _ErrorRetry extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.wifi_off,
+              Icon(service.offline ? Icons.wifi_off : Icons.error_outline,
                   size: 56, color: Theme.of(context).colorScheme.outline),
               const SizedBox(height: 16),
               Text(

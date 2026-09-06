@@ -21,12 +21,20 @@ class LedgerSync extends ChangeNotifier {
     this._store, {
     required String? Function() shopId,
     required String Function() shopName,
+    required bool Function() identityResolved,
   })  : _shopId = shopId,
-        _shopName = shopName;
+        _shopName = shopName,
+        _identityResolved = identityResolved;
 
   final DataStore _store;
   final String? Function() _shopId;
   final String Function() _shopName;
+  // True once LicenseService has finished figuring out who is signed in
+  // (admin vs. a specific shop). Every row must carry the *right* shop_id,
+  // so flush() waits for this rather than risk sending rows with shop_id
+  // still null right after sign-in — those would land un-scoped instead of
+  // under the one store they belong to.
+  final bool Function() _identityResolved;
 
   static const _table = 'transactions';
   static const _retryEvery = Duration(seconds: 90);
@@ -106,7 +114,14 @@ class LedgerSync extends ChangeNotifier {
   Future<void> flush() async {
     // RLS stamps the row's owner from the Firebase token, so there is nothing
     // to send until a shop owner is signed in. The queue simply waits.
-    if (_flushing || !_signedIn) return;
+    //
+    // Also wait for LicenseService to finish resolving *which* shop this is
+    // — right after sign-in _shopId() would otherwise still read null for a
+    // moment, and a row pushed in that window would upsert with shop_id
+    // unset instead of this store's id. Nothing is lost: the outbox just
+    // holds the entry until identity is known, then the retry timer (or the
+    // resolve-listener in main.dart) drains it with the correct shop_id.
+    if (_flushing || !_signedIn || !_identityResolved()) return;
     final client = _client;
     _flushing = true;
     notifyListeners();

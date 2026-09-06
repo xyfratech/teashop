@@ -157,10 +157,15 @@ class LicenseService extends ChangeNotifier with WidgetsBindingObserver {
       }
       row ??= await _sb.rpc('my_shop') as Map?;
 
-      if (row == null || row.isEmpty) {
+      // A missing row, an empty row, or a row without a real shop id all mean
+      // the same thing: this login ID isn't registered to any shop.
+      if (row == null || row.isEmpty || row['id'] == null) {
         _shop = null;
-        _error = 'No shop is registered for "$loginId". '
-            'Ask the admin to create your login.';
+        _error = loginId == null
+            ? 'That login ID is not registered. '
+                'Ask the admin to create your login.'
+            : 'Login ID "$loginId" doesn\'t match any shop. '
+                'Check the ID, or ask the admin to create your login.';
         _set(GateState.error);
         return;
       }
@@ -173,8 +178,13 @@ class LicenseService extends ChangeNotifier with WidgetsBindingObserver {
       _error = 'Backend error: ${e.message}';
       _set(GateState.error);
     } catch (e) {
+      // Anything else here (e.g. a malformed shop row) is not something the
+      // user can act on — show a plain message instead of a raw type error.
       _shop = null;
-      _error = e.toString().replaceFirst('Exception: ', '');
+      _error = loginId == null
+          ? 'Could not sign you in. Please try again.'
+          : 'Could not sign in with login ID "$loginId". '
+              'Check the ID and try again.';
       _set(GateState.error);
     }
   }

@@ -60,9 +60,24 @@ Future<void> main() async {
     store,
     shopId: () => licenseService.shop?.id,
     shopName: () => licenseService.shop?.name ?? store.shopName,
+    // GateState.loading means LicenseService hasn't yet learned whether this
+    // sign-in is the admin or, if not, which shop it is — shopId() would
+    // still read null. Once the gate moves past loading, shopId() (when
+    // there is one) is final for this session.
+    identityResolved: () => licenseService.gate != GateState.loading,
   )..start();
   appState.attachLedgerSync(ledgerSync);
   await ledgerSync.backfill(appState.ledgerRows());
+
+  // The very first flush/backfill after a fresh sign-in almost always races
+  // LicenseService's network round-trip (is_admin / claim_shop_by_login),
+  // so identityResolved() starts out false and flush() sits out. Kick it as
+  // soon as the gate settles instead of waiting on the 90s retry timer.
+  licenseService.addListener(() {
+    if (licenseService.gate != GateState.loading) {
+      unawaited(ledgerSync.syncNow());
+    }
+  });
 
   runApp(
     MultiProvider(
