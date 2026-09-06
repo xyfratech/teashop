@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 import '../data/data_store.dart';
+import 'pgrst_retry.dart';
 import 'shop.dart';
 import 'supabase_config.dart';
 
@@ -115,10 +116,13 @@ class LicenseService extends ChangeNotifier with WidgetsBindingObserver {
 
     final loginId = _currentLoginId;
 
-    // First call — this is our real "is the server reachable" probe.
+    // First call — this is our real "is the server reachable" probe. It's
+    // also the one most likely to catch a freshly-minted Firebase token
+    // before the two servers' clocks agree on "now" (PGRST303) — a single
+    // short retry clears that instead of surfacing it as an error.
     bool admin;
     try {
-      admin = await _sb.rpc('is_admin') == true;
+      admin = await withClockSkewRetry(() => _sb.rpc('is_admin')) == true;
       _offline = false;
     } catch (e) {
       _fallBackToCache(e);
@@ -287,7 +291,11 @@ class LicenseService extends ChangeNotifier with WidgetsBindingObserver {
   // ---------------------------------------------------------------------------
 
   Future<List<Shop>> adminListShops() async {
-    final rows = await _sb.rpc('admin_list_shops') as List;
+    // Runs right after sign-in on the admin's own device too, so it can hit
+    // the same fresh-token clock-skew window as the probe in [_resolve] —
+    // see [withClockSkewRetry].
+    final rows = await withClockSkewRetry(() => _sb.rpc('admin_list_shops'))
+        as List;
     return rows
         .map((e) => Shop.fromJson(Map<String, dynamic>.from(e as Map)))
         .toList();
