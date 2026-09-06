@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../license_service.dart';
 import '../shop.dart';
 import '../supabase_config.dart';
+import 'admin_shop_ledger_screen.dart';
 import 'shop_status_chip.dart';
 
 class AdminShopDetailScreen extends StatefulWidget {
@@ -143,6 +144,21 @@ class _AdminShopDetailScreenState extends State<AdminShopDetailScreen> {
               ),
               ('App version', _shop.appVersion ?? '—'),
             ]),
+            const SizedBox(height: 12),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.receipt_long_outlined),
+                title: const Text('View entries'),
+                subtitle: const Text(
+                    "This shop's income & expense entries, synced from its devices"),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => AdminShopLedgerScreen(shop: _shop),
+                  ),
+                ),
+              ),
+            ),
             const SizedBox(height: 16),
             Text('Renew subscription',
                 style: Theme.of(context).textTheme.titleMedium),

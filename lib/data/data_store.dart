@@ -132,6 +132,43 @@ class DataStore {
   bool cachedIsAdmin() => _meta.get('cachedIsAdmin') == true;
   Future<void> setCachedIsAdmin(bool v) => _meta.put('cachedIsAdmin', v);
 
+  // --- Which shop this device's ledger belongs to --------------------------
+  /// The login ID the on-device ledger was last populated for. When a
+  /// different shop signs in on the same device we wipe the local ledger (see
+  /// [resetForNewLogin]) so one shop never sees another's entries.
+  String? get boundLoginId => _meta.get('boundLoginId') as String?;
+  Future<void> setBoundLoginId(String id) => _meta.put('boundLoginId', id);
+
+  /// Drops this device's ledger, categories and products so a newly signed-in
+  /// shop starts clean; its own entries are then restored from the cloud by
+  /// [LedgerSync.pull]. Device-only preferences (theme, menu language) and the
+  /// install id are kept.
+  Future<void> resetForNewLogin() async {
+    final keep = <String, dynamic>{
+      'clientId': _meta.get('clientId'),
+      'themeMode': _meta.get('themeMode'),
+      'menuLang': _meta.get('menuLang'),
+      // These already hold the newly signed-in shop's values (LicenseService
+      // resolved it just before this runs), so keeping them avoids a needless
+      // re-resolve and a lock-out if the app is reopened offline right after.
+      'cachedShop': _meta.get('cachedShop'),
+      'cachedIsAdmin': _meta.get('cachedIsAdmin'),
+    };
+    await _txns.clear();
+    await _products.clear();
+    await _categories.clear();
+    await _ledgerOutbox.clear();
+    await _meta.clear();
+    for (final e in keep.entries) {
+      if (e.value != null) await _meta.put(e.key, e.value);
+    }
+    await _seed();
+    await _meta.put('seeded', true);
+    // The wiped ledger is empty, so there is nothing to back-fill; marking it
+    // done stops a stale backfill from re-uploading anything.
+    await _meta.put('ledgerBackfillDone', true);
+  }
+
   // --- Ledger cloud-backup outbox --------------------------------------------
   // A stable per-install id, used to partition this shop's rows in the backup
   // project (there is no user auth on that project).

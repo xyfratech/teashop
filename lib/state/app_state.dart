@@ -59,6 +59,14 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Instantly blanks the in-memory entry list. Used the moment a different
+  /// shop signs in, so none of the previous shop's entries flash on screen
+  /// before the local wipe + cloud restore finishes.
+  void clearInMemory() {
+    _txns = [];
+    notifyListeners();
+  }
+
   Future<void> load() async {
     _categories = _store.categories()
       ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));

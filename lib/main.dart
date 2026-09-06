@@ -73,15 +73,34 @@ Future<void> main() async {
   appState.attachLedgerSync(ledgerSync);
   await ledgerSync.backfill(appState.ledgerRows());
 
-  // The very first flush/backfill after a fresh sign-in almost always races
-  // LicenseService's network round-trip (is_admin / claim_shop_by_login),
-  // so identityResolved() starts out false and flush() sits out. Kick it as
-  // soon as the gate settles instead of waiting on the 90s retry timer.
-  licenseService.addListener(() {
-    if (licenseService.gate != GateState.loading) {
-      unawaited(ledgerSync.syncNow());
+  // Once the gate settles we know which shop is signed in. If it's a
+  // *different* shop than the one this device's ledger was built for, wipe the
+  // local ledger so the previous shop's entries don't show under this login —
+  // the new shop's own entries are then restored from the cloud. Also kicks
+  // the sync immediately instead of waiting on the 90s retry timer (the first
+  // flush after a fresh sign-in otherwise races LicenseService's network
+  // round-trip and sits out).
+  var handlingIdentity = false;
+  Future<void> onIdentitySettled() async {
+    if (handlingIdentity || licenseService.gate == GateState.loading) return;
+    handlingIdentity = true;
+    try {
+      final id = licenseService.currentLoginId;
+      if (id != null && store.boundLoginId != id) {
+        if (store.boundLoginId != null) {
+          appState.clearInMemory();
+          await store.resetForNewLogin();
+          await appState.load();
+        }
+        await store.setBoundLoginId(id);
+      }
+      await ledgerSync.syncNow();
+    } finally {
+      handlingIdentity = false;
     }
-  });
+  }
+
+  licenseService.addListener(() => unawaited(onIdentitySettled()));
 
   runApp(
     MultiProvider(

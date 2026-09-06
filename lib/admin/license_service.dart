@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 import '../data/data_store.dart';
+import 'ledger_entry.dart';
 import 'pgrst_retry.dart';
 import 'shop.dart';
 import 'supabase_config.dart';
@@ -83,6 +84,10 @@ class LicenseService extends ChangeNotifier with WidgetsBindingObserver {
     if (email == null || !email.contains('@')) return null;
     return email.split('@').first;
   }
+
+  /// The login id of the signed-in session (null when signed out). Used to
+  /// scope the on-device ledger to one shop.
+  String? get currentLoginId => _currentLoginId;
 
   // ---------------------------------------------------------------------------
   // Resolution
@@ -366,6 +371,29 @@ class LicenseService extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> adminSignOut() => signOut();
+
+  /// Every income / expense entry one shop has synced to the cloud, newest
+  /// first. Admin-only — served by the `transactions_admin_read` RLS policy,
+  /// scoped to the single [shopId] so one shop's ledger never bleeds into
+  /// another's. Paged so a long history is not truncated at PostgREST's
+  /// default 1000-row cap.
+  Future<List<LedgerEntry>> adminShopEntries(String shopId) async {
+    const pageSize = 1000;
+    final out = <LedgerEntry>[];
+    for (var from = 0;; from += pageSize) {
+      final rows = await _sb
+          .from('transactions')
+          .select()
+          .eq('shop_id', shopId)
+          .eq('deleted', false)
+          .order('occurred_at', ascending: false)
+          .range(from, from + pageSize - 1) as List;
+      out.addAll(rows
+          .map((e) => LedgerEntry.fromRow(Map<String, dynamic>.from(e as Map))));
+      if (rows.length < pageSize) break;
+    }
+    return out;
+  }
 
   int get pricePerMonth => SupabaseConfig.pricePerMonth;
   String get currency => SupabaseConfig.currencySymbol;
