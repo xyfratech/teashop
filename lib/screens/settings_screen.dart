@@ -385,7 +385,17 @@ class _SubscriptionTile extends StatelessWidget {
                             ],
                           ),
                         );
-                        if (ok == true) await license.signOut();
+                        if (ok != true) return;
+                        await license.signOut();
+                        // Settings sits on a route pushed on top of
+                        // LicenseGate's root — signing out swaps what that
+                        // root shows to LoginScreen, but this pushed screen
+                        // (and anything else stacked above it) would stay
+                        // put covering it unless it's popped away here.
+                        if (context.mounted) {
+                          Navigator.of(context)
+                              .popUntil((route) => route.isFirst);
+                        }
                       },
                 icon: const Icon(Icons.logout, size: 18),
                 label: const Text('Sign out'),
@@ -416,24 +426,29 @@ class _LedgerBackupTile extends StatelessWidget {
     }
 
     final pending = sync.pending;
+    final busy = sync.syncing || sync.restoring;
     final String status;
-    if (sync.syncing) {
+    if (sync.restoring) {
+      status = 'Restoring entries from the cloud…';
+    } else if (sync.syncing) {
       status = 'Backing up…';
     } else if (pending > 0) {
       status = '$pending change${pending == 1 ? '' : 's'} waiting to upload';
     } else if (sync.lastSyncAt != null) {
-      status = 'All entries backed up · ${prettyDate(sync.lastSyncAt!)}';
+      status = 'All entries synced · ${prettyDate(sync.lastSyncAt!)}';
     } else {
-      status = 'Every entry is copied to the cloud automatically.';
+      status = 'Entries sync to the cloud and to your other devices.';
     }
 
     return Column(
       children: [
         ListTile(
           leading: Icon(
-            pending > 0 ? Icons.cloud_sync_outlined : Icons.cloud_done_outlined,
+            busy || pending > 0
+                ? Icons.cloud_sync_outlined
+                : Icons.cloud_done_outlined,
           ),
-          title: const Text('Automatic backup'),
+          title: const Text('Automatic sync'),
           subtitle: Text(status),
         ),
         if (sync.lastError != null)
@@ -452,9 +467,9 @@ class _LedgerBackupTile extends StatelessWidget {
           child: Align(
             alignment: Alignment.centerLeft,
             child: OutlinedButton.icon(
-              onPressed: sync.syncing ? null : sync.syncNow,
+              onPressed: busy ? null : sync.syncNow,
               icon: const Icon(Icons.sync, size: 18),
-              label: const Text('Back up now'),
+              label: const Text('Sync now'),
             ),
           ),
         ),

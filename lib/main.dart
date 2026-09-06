@@ -65,6 +65,10 @@ Future<void> main() async {
     // still read null. Once the gate moves past loading, shopId() (when
     // there is one) is final for this session.
     identityResolved: () => licenseService.gate != GateState.loading,
+    // Pulls the shop's entries back from the server and merges them in, so a
+    // ledger built up on one device shows up on every device using the same
+    // login ID.
+    applyRemote: appState.mergeRemoteLedger,
   )..start();
   appState.attachLedgerSync(ledgerSync);
   await ledgerSync.backfill(appState.ledgerRows());

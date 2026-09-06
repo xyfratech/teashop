@@ -151,6 +151,11 @@ class DataStore {
           MapEntry(e.key, Map<String, dynamic>.from(e.value as Map)))
       .toList();
 
+  /// Ids of entries with a local change still waiting to upload. A cloud
+  /// pull must not overwrite these — the queued version is newer.
+  Set<String> ledgerOutboxIds() =>
+      _ledgerOutbox.keys.map((k) => k.toString()).toSet();
+
   Future<void> ledgerOutboxPut(String id, Map<String, dynamic> row) =>
       _ledgerOutbox.put(id, row);
 

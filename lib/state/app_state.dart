@@ -177,6 +177,115 @@ class AppState extends ChangeNotifier {
 
   List<Map<String, dynamic>> ledgerRows() => _txns.map(ledgerRow).toList();
 
+  // --- cloud restore -------------------------------------------------------
+  /// Merges income / expense rows pulled from the cloud into the on-device
+  /// ledger (see [LedgerSync.pull]). These rows are this login's own entries
+  /// from whichever device last touched them, so the server copy wins — the
+  /// one exception is an entry still sitting in the local outbox, whose
+  /// queued version has not reached the server yet. Returns how many local
+  /// entries were added, changed or removed.
+  Future<int> mergeRemoteLedger(List<Map<String, dynamic>> rows) async {
+    final pending = _store.ledgerOutboxIds();
+    final localById = {for (final t in _store.txns()) t.id: t};
+    var changed = 0;
+
+    for (final r in rows) {
+      final id = r['id'] as String?;
+      if (id == null || pending.contains(id)) continue;
+
+      if (r['deleted'] == true) {
+        if (localById.containsKey(id)) {
+          await _store.deleteTxn(id);
+          changed++;
+        }
+        continue;
+      }
+
+      final remote = _txnFromRemote(id, r);
+      if (remote == null) continue;
+
+      final local = localById[id];
+      if (local != null && _sameTxn(local, remote)) continue;
+
+      await _ensureCategoryFor(r);
+      await _store.putTxn(remote);
+      changed++;
+    }
+
+    if (changed > 0) await load();
+    return changed;
+  }
+
+  Txn? _txnFromRemote(String id, Map<String, dynamic> r) {
+    final amount = (r['amount'] as num?)?.toDouble();
+    final occurredAt = r['occurred_at'] as String?;
+    if (amount == null || occurredAt == null) return null;
+    final type = TxnType.parse(r['type'] as String?);
+    return Txn(
+      id: id,
+      type: type,
+      amount: amount,
+      categoryId: _localCategoryId(
+          r['category_id'] as String?, r['category_name'] as String?, type),
+      note: (r['note'] as String?) ?? '',
+      date: DateTime.parse(occurredAt).toLocal(),
+      method: PayMethod.parse(r['method'] as String?),
+      quantity: (r['qty'] as num?)?.toInt() ?? 1,
+      productId: r['product_id'] as String?,
+    );
+  }
+
+  /// The local category an incoming row should file under: an exact id hit,
+  /// else a same-named category in the same direction, else the incoming id
+  /// as-is ([_ensureCategoryFor] then creates it) or the default bucket.
+  String _localCategoryId(String? remoteId, String? remoteName, TxnType type) {
+    if (remoteId != null && _categories.any((c) => c.id == remoteId)) {
+      return remoteId;
+    }
+    final name = remoteName?.trim().toLowerCase();
+    if (name != null && name.isNotEmpty) {
+      for (final c in _categories) {
+        if (c.type == type && c.name.toLowerCase() == name) return c.id;
+      }
+    }
+    return remoteId ?? defaultCategoryFor(type).id;
+  }
+
+  /// Creates a local category for an incoming row when neither its id nor its
+  /// name matches one we already have, so the restored entry keeps a real
+  /// label instead of showing up as "Uncategorised".
+  Future<void> _ensureCategoryFor(Map<String, dynamic> r) async {
+    final remoteId = r['category_id'] as String?;
+    if (remoteId == null) return;
+    final type = TxnType.parse(r['type'] as String?);
+    if (_localCategoryId(remoteId, r['category_name'] as String?, type) !=
+        remoteId) {
+      return; // matched an existing category
+    }
+    if (_categories.any((c) => c.id == remoteId)) return;
+    final name = (r['category_name'] as String?)?.trim();
+    await _store.putCategory(Category(
+      id: remoteId,
+      name: name != null && name.isNotEmpty
+          ? name
+          : (type == TxnType.income ? 'Other Income' : 'Other Expense'),
+      type: type,
+      iconKey: type == TxnType.income ? 'cash' : 'other',
+    ));
+    _categories = _store.categories()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+  }
+
+  bool _sameTxn(Txn a, Txn b) =>
+      a.type == b.type &&
+      a.amount == b.amount &&
+      a.categoryId == b.categoryId &&
+      a.note == b.note &&
+      a.date.isAtSameMomentAs(b.date) &&
+      a.method == b.method &&
+      a.quantity == b.quantity &&
+      a.productId == b.productId;
+
   // --- mutations ---
   Future<void> addTxn(Txn t) async {
     await _store.putTxn(t);

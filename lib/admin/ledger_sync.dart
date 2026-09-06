@@ -6,29 +6,40 @@ import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 import '../data/data_store.dart';
 
-/// Cloud copy of the tea-shop ledger.
+/// Cloud copy of the tea-shop ledger — two-way.
 ///
-/// Every income / expense entry saved on-device is mirrored to the
+/// **Push:** every income / expense entry saved on-device is mirrored to the
 /// `transactions` table in the app's Supabase project, keyed to the signed-in
-/// shop owner's Firebase UID (stamped server-side). The owner — and the admin —
-/// can read it back for off-device reporting.
+/// shop owner's Firebase UID (stamped server-side).
+///
+/// **Pull:** [pull] reads that same set of rows back and merges them into the
+/// on-device store. Because every device that signs in with the same login ID
+/// authenticates as the same Firebase user, row-level security scopes the read
+/// to exactly this shop's entries — so an entry added on one phone shows up on
+/// every other device signed in with that ID.
 ///
 /// Writes go through a Hive-backed outbox so nothing is lost when the device
 /// is offline; the queue is drained on start-up, after every change and on a
-/// slow retry timer. It only flushes while a shop owner is signed in.
+/// slow retry timer. It only syncs while a shop owner is signed in.
 class LedgerSync extends ChangeNotifier {
   LedgerSync(
     this._store, {
     required String? Function() shopId,
     required String Function() shopName,
     required bool Function() identityResolved,
+    Future<int> Function(List<Map<String, dynamic>> rows)? applyRemote,
   })  : _shopId = shopId,
         _shopName = shopName,
-        _identityResolved = identityResolved;
+        _identityResolved = identityResolved,
+        _applyRemote = applyRemote;
 
   final DataStore _store;
   final String? Function() _shopId;
   final String Function() _shopName;
+
+  /// Merges rows pulled from the server into the on-device ledger and returns
+  /// how many local entries changed. Wired to `AppState.mergeRemoteLedger`.
+  final Future<int> Function(List<Map<String, dynamic>> rows)? _applyRemote;
   // True once LicenseService has finished figuring out who is signed in
   // (admin vs. a specific shop). Every row must carry the *right* shop_id,
   // so flush() waits for this rather than risk sending rows with shop_id
@@ -41,8 +52,15 @@ class LedgerSync extends ChangeNotifier {
 
   Timer? _timer;
   bool _flushing = false;
+  bool _pulling = false;
 
   bool get enabled => true;
+
+  /// A cloud pull is in progress (restoring entries from the server).
+  bool get restoring => _pulling;
+
+  /// When the ledger was last restored from the server.
+  DateTime? lastPullAt;
 
   /// The shared, Firebase-authenticated Supabase client.
   SupabaseClient get _client => Supabase.instance.client;
@@ -57,8 +75,13 @@ class LedgerSync extends ChangeNotifier {
   void start() {
     _timer = Timer.periodic(_retryEvery, (_) {
       if (pending > 0) unawaited(flush());
+      final since = lastPullAt;
+      if (since == null ||
+          DateTime.now().difference(since) > const Duration(minutes: 5)) {
+        unawaited(pull());
+      }
     });
-    unawaited(flush());
+    unawaited(syncNow());
   }
 
   @override
@@ -107,7 +130,63 @@ class LedgerSync extends ChangeNotifier {
     unawaited(flush());
   }
 
-  Future<void> syncNow() => flush();
+  /// Upload anything pending, then restore the server's copy on top.
+  Future<void> syncNow() async {
+    await flush();
+    await pull();
+  }
+
+  // --- pull / restore ----------------------------------------------------
+
+  static const _pageSize = 1000; // PostgREST's default row cap
+
+  /// Reads this shop's ledger back from the server and merges it into the
+  /// on-device store. Safe to call often — it no-ops until a shop owner is
+  /// signed in and their identity is resolved, and while another pull runs.
+  ///
+  /// The first pull of a session fetches the whole ledger (paged, so a large
+  /// history is not truncated at [_pageSize]); later pulls only ask for rows
+  /// touched since the last one, with a few minutes of overlap for clock skew.
+  Future<void> pull() async {
+    final apply = _applyRemote;
+    if (apply == null || _pulling || !_signedIn || !_identityResolved()) {
+      return;
+    }
+    _pulling = true;
+    notifyListeners();
+    try {
+      // RLS restricts every read to rows whose user_id is the signed-in
+      // Firebase UID — exactly the entries made under this login ID on any
+      // device.
+      final since = lastPullAt;
+      final rows = <Map<String, dynamic>>[];
+      for (var from = 0;; from += _pageSize) {
+        var query = _client.from(_table).select();
+        if (since != null) {
+          query = query.gte(
+            'updated_at',
+            since
+                .toUtc()
+                .subtract(const Duration(minutes: 5))
+                .toIso8601String(),
+          );
+        }
+        final page = await query
+            .order('updated_at', ascending: true)
+            .range(from, from + _pageSize - 1) as List;
+        rows.addAll(page.map((e) => Map<String, dynamic>.from(e as Map)));
+        if (page.length < _pageSize) break;
+      }
+      await apply(rows);
+      lastPullAt = DateTime.now();
+      lastError = null;
+    } catch (e) {
+      lastError = e.toString();
+    } finally {
+      _pulling = false;
+      notifyListeners();
+    }
+  }
 
   // --- drain -------------------------------------------------------------
 

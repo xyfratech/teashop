@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../admin/ledger_sync.dart';
 import '../models/app_enums.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
@@ -30,7 +31,12 @@ class DashboardScreen extends StatelessWidget {
     return SafeArea(
       bottom: false,
       child: RefreshIndicator(
-        onRefresh: state.load,
+        onRefresh: () async {
+          // Pull the latest entries from the cloud (and push anything queued),
+          // then repaint from the local store.
+          await context.read<LedgerSync>().syncNow();
+          await state.load();
+        },
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
           children: [
